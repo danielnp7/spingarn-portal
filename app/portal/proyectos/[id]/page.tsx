@@ -135,12 +135,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <p className="text-xs text-gray-400 mb-0.5">Entrega estimada</p>
             <p className="text-sm font-medium text-gray-900">{fmtDate(p.deadline)}</p>
           </div>
-          {p.description && (
-            <div className="col-span-2">
-              <p className="text-xs text-gray-400 mb-0.5">Concepto</p>
-              <p className="text-sm text-gray-700">{p.description}</p>
-            </div>
-          )}
         </div>
       </div>
 

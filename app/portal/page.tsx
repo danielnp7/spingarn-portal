@@ -80,24 +80,19 @@ export default async function PortalHomePage() {
         </div>
         <div className="space-y-3">
           {(projects ?? []).slice(0, 5).map(p => (
-            <div key={p.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 text-sm truncate">{p.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {(p.area as { name?: string } | null)?.name ?? "—"} · Asesor: {(p.owner as { name?: string } | null)?.name?.split(" ")[0] ?? "—"}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                {p.deadline && (
-                  <span className="text-xs text-gray-400 hidden sm:block">
-                    {new Date(p.deadline).toLocaleDateString("es-EC", { day: "numeric", month: "short" })}
-                  </span>
-                )}
-                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(p.status)}`}>
+            <Link key={p.id} href={`/portal/proyectos/${p.id}`} style={{ display: "block", textDecoration: "none" }}>
+              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-pink-200 hover:shadow-md transition-all flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 text-sm truncate">{p.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {(p.owner as { name?: string } | null)?.name ?? "—"}
+                  </p>
+                </div>
+                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${statusColor(p.status)}`}>
                   {statusLabel(p.status)}
                 </span>
               </div>
-            </div>
+            </Link>
           ))}
           {(projects ?? []).length === 0 && (
             <div className="bg-white rounded-xl p-8 text-center text-gray-400 border border-dashed border-gray-200">
