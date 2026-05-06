@@ -88,8 +88,8 @@ export default async function ProyectosPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontWeight: 600, color: "#111827", fontSize: 14, margin: 0 }}>{p.name}</p>
                         <p style={{ color: "#9CA3AF", fontSize: 12, margin: "4px 0 0" }}>
-                          Líder: <strong style={{ color: "#6B7280" }}>{leaderName}</strong>
-                          <span style={{ marginLeft: 12 }}>Responsable: <strong style={{ color: "#6B7280" }}>{ownerName}</strong></span>
+                          Responsable: <strong style={{ color: "#6B7280" }}>{ownerName}</strong>
+                          <span style={{ marginLeft: 12 }}>Gestor: <strong style={{ color: "#6B7280" }}>{leaderName}</strong></span>
                           {startDate && <span style={{ marginLeft: 12 }}>Inicio: <strong style={{ color: "#6B7280" }}>{startDate}</strong></span>}
                         </p>
                       </div>
@@ -138,7 +138,7 @@ export default async function ProyectosPage() {
                 <div style={{ background: "white", borderRadius: 12, padding: "12px 16px", border: "1px solid #F3F4F6", display: "flex", alignItems: "center", gap: 16, opacity: 0.6 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontWeight: 500, color: "#374151", fontSize: 14, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</p>
-                    <p style={{ color: "#9CA3AF", fontSize: 12, margin: "2px 0 0" }}>Líder: {leaderMap[p.id] ?? "—"} · Responsable: {ownerMap[p.id] ?? "—"}</p>
+                    <p style={{ color: "#9CA3AF", fontSize: 12, margin: "2px 0 0" }}>Responsable: {ownerMap[p.id] ?? "—"} · Gestor: {leaderMap[p.id] ?? "—"}</p>
                   </div>
                   <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLOR[p.status] ?? "bg-gray-100 text-gray-600"}`}>
                     {STATUS_LABEL[p.status] ?? p.status}

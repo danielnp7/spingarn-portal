@@ -57,15 +57,24 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const { data: p } = await supabase
     .from("projects")
-    .select("id, name, status, description, client_notes, value, billed, collected, start_date, deadline, leader:profiles!leader_id(name), owner:profiles!owner_id(name), area:areas(name)")
+    .select("id, name, status, description, client_notes, value, billed, collected, start_date, deadline, leader_id, assigned_to, owner:profiles!owner_id(name), area:areas(name)")
     .eq("id", id)
     .eq("client_id", profile.client_id)
     .single();
 
   if (!p) notFound();
 
+  // Resolve gestor (leader_id → assigned_to) and responsable (owner)
+  const gestorId = (p as typeof p & { leader_id?: string; assigned_to?: string }).leader_id
+    ?? (p as typeof p & { assigned_to?: string }).assigned_to;
+  let gestorName = "—";
+  if (gestorId) {
+    const { data: g } = await supabase.from("profiles").select("name").eq("id", gestorId).single();
+    if (g) gestorName = g.name;
+  }
+
   const stepIdx = getStepIdx(p.status);
-  const leader = (p.leader as { name?: string } | null)?.name ?? (p.owner as { name?: string } | null)?.name ?? "—";
+  const ownerName = (p.owner as { name?: string } | null)?.name ?? "—";
   const area = (p.area as { name?: string } | null)?.name ?? "—";
   const pending = Math.max(0, (p.billed ?? 0) - (p.collected ?? 0));
 
@@ -84,7 +93,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             {statusLabel(p.status)}
           </span>
         </div>
-        <p className="text-sm text-gray-400">{area} · Líder: {leader}</p>
+        <p className="text-sm text-gray-400">{area} · Responsable: {ownerName} · Gestor: {gestorName}</p>
       </div>
 
       {/* Progress */}
