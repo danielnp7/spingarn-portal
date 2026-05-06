@@ -3,14 +3,10 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 const AREAS = [
-  "M&A y Energía",
-  "Propiedad Intelectual",
-  "Aviación y Regulatorio",
-  "Protección de Datos Personales",
-  "Contratación Pública",
-  "Tecnología y Telecomunicaciones",
-  "Laboral y Seguridad Social",
-  "Tax & Finance",
+  "Consultoría Financiera",
+  "Consultoría General",
+  "Comercio Exterior",
+  "Inversiones",
 ];
 
 const URGENCY = [
@@ -67,7 +63,8 @@ export default function SolicitudesPage() {
         <h2 className="text-xl font-bold text-gray-900 mb-2">Solicitud enviada</h2>
         <p className="text-gray-500 text-sm mb-6">Tu asesor de Spingarn recibirá tu requerimiento y te contactará a la brevedad.</p>
         <button onClick={() => { setSent(false); setArea(""); setDescription(""); setContact(""); }}
-          className="px-6 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition">
+          className="px-6 py-2.5 text-white rounded-xl text-sm font-semibold transition"
+          style={{ background: "#C8007A" }}>
           Nueva solicitud
         </button>
       </div>
@@ -88,7 +85,9 @@ export default function SolicitudesPage() {
             value={area}
             onChange={e => setArea(e.target.value)}
             required
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none"
+            onFocus={e => e.target.style.boxShadow = "0 0 0 2px #C8007A40"}
+            onBlur={e => e.target.style.boxShadow = "none"}
           >
             <option value="">Selecciona un área</option>
             {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
@@ -103,7 +102,9 @@ export default function SolicitudesPage() {
             required
             rows={5}
             placeholder="Describe con el mayor detalle posible lo que necesitas..."
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none resize-none"
+            onFocus={e => e.target.style.boxShadow = "0 0 0 2px #C8007A40"}
+            onBlur={e => e.target.style.boxShadow = "none"}
           />
         </div>
 
@@ -115,11 +116,11 @@ export default function SolicitudesPage() {
                 key={u.value}
                 type="button"
                 onClick={() => setUrgency(u.value)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
-                  urgency === u.value
-                    ? "bg-violet-600 text-white border-violet-600"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-violet-300"
-                }`}
+                className="px-4 py-2 rounded-xl text-sm font-medium border transition-all"
+                style={urgency === u.value
+                  ? { background: "#C8007A", color: "white", borderColor: "#C8007A" }
+                  : { background: "white", color: "#4B5563", borderColor: "#E5E7EB" }
+                }
               >
                 {u.label}
               </button>
@@ -136,7 +137,9 @@ export default function SolicitudesPage() {
             value={contact}
             onChange={e => setContact(e.target.value)}
             placeholder="Ej: WhatsApp +593..., email, llamada..."
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none"
+            onFocus={e => e.target.style.boxShadow = "0 0 0 2px #C8007A40"}
+            onBlur={e => e.target.style.boxShadow = "none"}
           />
         </div>
 
@@ -145,7 +148,10 @@ export default function SolicitudesPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-semibold transition disabled:opacity-50"
+          className="w-full py-3 text-white rounded-xl text-sm font-semibold transition disabled:opacity-50"
+          style={{ background: "#C8007A" }}
+          onMouseEnter={e => (e.currentTarget.style.background = "#A3005F")}
+          onMouseLeave={e => (e.currentTarget.style.background = "#C8007A")}
         >
           {loading ? "Enviando..." : "Enviar solicitud"}
         </button>

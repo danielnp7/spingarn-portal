@@ -30,7 +30,7 @@ export default async function ProyectosPage() {
 
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name, status, deadline, description, value, start_date, area:areas(name), owner:profiles!owner_id(name)")
+    .select("id, name, status, deadline, client_notes, value, start_date, area:areas(name), owner:profiles!owner_id(name)")
     .eq("client_id", profile.client_id)
     .order("created_at", { ascending: false });
 
@@ -61,7 +61,12 @@ export default async function ProyectosPage() {
                     {statusLabel(p.status)}
                   </span>
                 </div>
-                {p.description && <p className="text-sm text-gray-600 mb-3 line-clamp-2">{p.description}</p>}
+                {(p as typeof p & { client_notes?: string }).client_notes && (
+                  <div className="rounded-lg p-3 mb-3 text-sm" style={{ background: "#FFF0F8", borderLeft: "3px solid #C8007A" }}>
+                    <p className="text-xs font-semibold mb-1" style={{ color: "#C8007A" }}>Actualización de tu asesor</p>
+                    <p className="text-gray-700">{(p as typeof p & { client_notes?: string }).client_notes}</p>
+                  </div>
+                )}
                 <div className="flex items-center gap-4 text-xs text-gray-400">
                   {p.start_date && <span>Inicio: {new Date(p.start_date).toLocaleDateString("es-EC")}</span>}
                   {p.deadline && <span>Entrega: {new Date(p.deadline).toLocaleDateString("es-EC")}</span>}
