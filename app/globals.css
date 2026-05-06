@@ -1,27 +1,5 @@
 @import "tailwindcss";
 
-@theme {
-  /* Spingarn Brand - Magenta Primary */
-  --color-primary: #C8007A;
-  --color-primary-50: #FFF0F8;
-  --color-primary-100: #FFD6EE;
-  --color-primary-200: #FFADDD;
-  --color-primary-300: #FF73C0;
-  --color-primary-400: #FF3AA3;
-  --color-primary-500: #C8007A;
-  --color-primary-600: #A3005F;
-  --color-primary-700: #7D0049;
-  --color-primary-800: #580033;
-  --color-primary-900: #33001E;
-
-  --color-background: #FAFAFA;
-  --color-foreground: #1A1A1A;
-  --color-card: #FFFFFF;
-  --color-border: #E5E7EB;
-  --color-muted: #F5F5F5;
-  --color-muted-foreground: #6B7280;
-}
-
 :root {
   --background: #FAFAFA;
   --foreground: #1A1A1A;
