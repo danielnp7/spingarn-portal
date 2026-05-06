@@ -42,10 +42,22 @@ export default async function PortalHomePage() {
   const { data: client } = await supabase.from("clients").select("name, industry").eq("id", profile.client_id).single();
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name, status, deadline, client_notes, area:areas(name), owner:profiles!owner_id(name)")
+    .select("id, name, status, start_date, client_notes, owner:profiles!owner_id(name)")
     .eq("client_id", profile.client_id)
     .not("status", "in", "(cerrado,cancelado)")
     .order("created_at", { ascending: false });
+
+  // Resolve gestor names
+  const gestorMap: Record<string, string> = {};
+  if (projects && projects.length > 0) {
+    const { data: raw } = await supabase.from("projects").select("id, leader_id, assigned_to").in("id", projects.map(p => p.id));
+    const ids = [...new Set((raw ?? []).flatMap(p => [p.leader_id, p.assigned_to].filter(Boolean)))] as string[];
+    if (ids.length > 0) {
+      const { data: profs } = await supabase.from("profiles").select("id, name").in("id", ids);
+      const byId = Object.fromEntries((profs ?? []).map(p => [p.id, p.name]));
+      (raw ?? []).forEach(p => { const id = p.leader_id ?? p.assigned_to; if (id && byId[id]) gestorMap[p.id] = byId[id]; });
+    }
+  }
 
   const activeCount = projects?.filter(p => ["aprobado", "en_ejecucion"].includes(p.status)).length ?? 0;
 
@@ -79,21 +91,35 @@ export default async function PortalHomePage() {
           <Link href="/portal/proyectos" className="text-xs hover:underline" style={{ color: "#C8007A" }}>Ver todos →</Link>
         </div>
         <div className="space-y-3">
-          {(projects ?? []).slice(0, 5).map(p => (
-            <Link key={p.id} href={`/portal/proyectos/${p.id}`} style={{ display: "block", textDecoration: "none" }}>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:border-pink-200 hover:shadow-md transition-all flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 text-sm truncate">{p.name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {(p.owner as { name?: string } | null)?.name ?? "—"}
-                  </p>
+          {(projects ?? []).slice(0, 5).map(p => {
+            const STEP_KEYS = ["propuesta", "aprobado", "en_ejecucion", "entregado", "cerrado"];
+            const STEPS = ["Propuesta", "Aprobado", "En Ejecución", "Entregado", "Finalizado"];
+            const stepIdx = Math.max(0, STEP_KEYS.indexOf(p.status));
+            const pct = (stepIdx / (STEPS.length - 1)) * 100;
+            const ownerName = (p.owner as { name?: string } | null)?.name ?? "—";
+            const gestorName = gestorMap[p.id] ?? "—";
+            return (
+              <Link key={p.id} href={`/portal/proyectos/${p.id}`} style={{ display: "block", textDecoration: "none" }}>
+                <div style={{ background: "white", borderRadius: 16, padding: 16, border: "1px solid #F3F4F6", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", cursor: "pointer" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontWeight: 600, color: "#111827", fontSize: 14, margin: 0 }}>{p.name}</p>
+                      <p style={{ color: "#9CA3AF", fontSize: 11, margin: "3px 0 0" }}>
+                        Responsable: <strong style={{ color: "#6B7280" }}>{ownerName}</strong>
+                        <span style={{ marginLeft: 10 }}>Gestor: <strong style={{ color: "#6B7280" }}>{gestorName}</strong></span>
+                      </p>
+                    </div>
+                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${statusColor(p.status)}`} style={{ flexShrink: 0 }}>
+                      {statusLabel(p.status)}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: "#F3F4F6", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: "#C8007A", borderRadius: 99 }} />
+                  </div>
                 </div>
-                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${statusColor(p.status)}`}>
-                  {statusLabel(p.status)}
-                </span>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
           {(projects ?? []).length === 0 && (
             <div className="bg-white rounded-xl p-8 text-center text-gray-400 border border-dashed border-gray-200">
               <p>No hay proyectos activos en este momento.</p>
