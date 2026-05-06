@@ -1,23 +1,41 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-function statusLabel(s: string) {
-  const map: Record<string, string> = {
-    propuesta: "Propuesta", aprobado: "Aprobado", en_ejecucion: "En Ejecución",
-    entregado: "Entregado", cerrado: "Cerrado", cancelado: "Cancelado",
-  };
-  return map[s] ?? s;
+const STEPS = [
+  { key: "propuesta", label: "Propuesta" },
+  { key: "aprobado", label: "Aprobado" },
+  { key: "en_ejecucion", label: "En Ejecución" },
+  { key: "entregado", label: "Entregado" },
+  { key: "cerrado", label: "Finalizado" },
+];
+
+function getProgress(status: string) {
+  if (status === "cancelado") return -1;
+  const idx = STEPS.findIndex(s => s.key === status);
+  return idx === -1 ? 0 : idx;
 }
 
 function statusColor(s: string) {
   const map: Record<string, string> = {
-    propuesta: "bg-gray-100 text-gray-600", aprobado: "bg-blue-100 text-blue-700",
-    en_ejecucion: "bg-amber-100 text-amber-700", entregado: "bg-green-100 text-green-700",
-    cerrado: "bg-gray-100 text-gray-500", cancelado: "bg-red-100 text-red-600",
+    propuesta: "bg-gray-100 text-gray-600",
+    aprobado: "bg-blue-100 text-blue-700",
+    en_ejecucion: "bg-amber-100 text-amber-700",
+    entregado: "bg-green-100 text-green-700",
+    cerrado: "bg-gray-100 text-gray-500",
+    cancelado: "bg-red-100 text-red-600",
   };
   return map[s] ?? "bg-gray-100 text-gray-600";
+}
+
+function statusLabel(s: string) {
+  const map: Record<string, string> = {
+    propuesta: "Propuesta", aprobado: "Aprobado", en_ejecucion: "En Ejecución",
+    entregado: "Entregado", cerrado: "Finalizado", cancelado: "Cancelado",
+  };
+  return map[s] ?? s;
 }
 
 export default async function ProyectosPage() {
@@ -30,7 +48,7 @@ export default async function ProyectosPage() {
 
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, name, status, deadline, client_notes, value, start_date, area:areas(name), owner:profiles!owner_id(name)")
+    .select("id, name, status, start_date, deadline, client_notes, leader:profiles!leader_id(name), owner:profiles!owner_id(name)")
     .eq("client_id", profile.client_id)
     .order("created_at", { ascending: false });
 
@@ -48,31 +66,64 @@ export default async function ProyectosPage() {
         <section>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Activos</h2>
           <div className="space-y-3">
-            {active.map(p => (
-              <div key={p.id} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900">{p.name}</h3>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {(p.area as { name?: string } | null)?.name ?? "—"} · Asesor: {(p.owner as { name?: string } | null)?.name ?? "—"}
-                    </p>
+            {active.map(p => {
+              const stepIdx = getProgress(p.status);
+              const leader = (p.leader as { name?: string } | null)?.name ?? (p.owner as { name?: string } | null)?.name ?? "—";
+              return (
+                <Link key={p.id} href={`/portal/proyectos/${p.id}`}
+                  className="block bg-white rounded-xl p-5 shadow-sm border border-gray-100 hover:border-pink-200 hover:shadow-md transition-all group">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 group-hover:text-[#C8007A] transition-colors">{p.name}</h3>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Líder: {leader}
+                        {p.start_date && <span className="ml-3">Inicio: {new Date(p.start_date).toLocaleDateString("es-EC", { day: "numeric", month: "short", year: "numeric" })}</span>}
+                      </p>
+                    </div>
+                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${statusColor(p.status)}`}>
+                      {statusLabel(p.status)}
+                    </span>
                   </div>
-                  <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${statusColor(p.status)}`}>
-                    {statusLabel(p.status)}
-                  </span>
-                </div>
-                {(p as typeof p & { client_notes?: string }).client_notes && (
-                  <div className="rounded-lg p-3 mb-3 text-sm" style={{ background: "#FFF0F8", borderLeft: "3px solid #C8007A" }}>
-                    <p className="text-xs font-semibold mb-1" style={{ color: "#C8007A" }}>Actualización de tu asesor</p>
-                    <p className="text-gray-700">{(p as typeof p & { client_notes?: string }).client_notes}</p>
+
+                  {/* Progress bar */}
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      {STEPS.map((step, i) => (
+                        <div key={step.key} className="flex flex-col items-center flex-1">
+                          <div className={`w-2.5 h-2.5 rounded-full border-2 transition-all ${
+                            i <= stepIdx
+                              ? "border-[#C8007A] bg-[#C8007A]"
+                              : "border-gray-200 bg-white"
+                          }`} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="absolute left-0 top-0 h-full rounded-full transition-all"
+                        style={{ width: `${(stepIdx / (STEPS.length - 1)) * 100}%`, background: "#C8007A" }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      {STEPS.map((step, i) => (
+                        <span key={step.key} className={`text-[9px] font-medium flex-1 text-center ${i <= stepIdx ? "text-[#C8007A]" : "text-gray-300"}`}>
+                          {step.label}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                )}
-                <div className="flex items-center gap-4 text-xs text-gray-400">
-                  {p.start_date && <span>Inicio: {new Date(p.start_date).toLocaleDateString("es-EC")}</span>}
-                  {p.deadline && <span>Entrega: {new Date(p.deadline).toLocaleDateString("es-EC")}</span>}
-                </div>
-              </div>
-            ))}
+
+                  {p.client_notes && (
+                    <div className="rounded-lg px-3 py-2 text-xs" style={{ background: "#FFF0F8", borderLeft: "3px solid #C8007A" }}>
+                      <span className="font-semibold" style={{ color: "#C8007A" }}>Actualización: </span>
+                      <span className="text-gray-700 line-clamp-1">{(p as typeof p & { client_notes?: string }).client_notes}</span>
+                    </div>
+                  )}
+
+                  <p className="text-xs mt-3" style={{ color: "#C8007A" }}>Ver detalle →</p>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}
@@ -82,15 +133,16 @@ export default async function ProyectosPage() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Historial</h2>
           <div className="space-y-2">
             {closed.map(p => (
-              <div key={p.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 opacity-70">
+              <Link key={p.id} href={`/portal/proyectos/${p.id}`}
+                className="block bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center gap-4 opacity-70 hover:opacity-100 transition-opacity">
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-700 text-sm truncate">{p.name}</p>
-                  <p className="text-xs text-gray-400">{(p.area as { name?: string } | null)?.name ?? "—"}</p>
+                  <p className="text-xs text-gray-400">{(p.leader as { name?: string } | null)?.name ?? (p.owner as { name?: string } | null)?.name ?? "—"}</p>
                 </div>
                 <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(p.status)}`}>
                   {statusLabel(p.status)}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </section>
