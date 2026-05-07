@@ -41,7 +41,9 @@ export default function PortalChatbot() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: next.map(m => ({ role: m.role, content: m.content })),
+          // Anthropic requires first message to be from user — skip the UI welcome message
+          messages: next.filter(m => !(m.role === "assistant" && m === WELCOME))
+                        .map(m => ({ role: m.role, content: m.content })),
         }),
       });
       const data = await res.json();
