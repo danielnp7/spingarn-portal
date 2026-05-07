@@ -42,17 +42,21 @@ export default function PortalChatbot() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           // Anthropic requires first message to be from user — skip the UI welcome message
-          messages: next.filter(m => !(m.role === "assistant" && m === WELCOME))
-                        .map(m => ({ role: m.role, content: m.content })),
+          messages: next
+            .filter(m => !(m.role === "assistant" && m.content === WELCOME.content))
+            .map(m => ({ role: m.role, content: m.content })),
         }),
       });
       const data = await res.json();
-      if (data.text) {
+      if (!res.ok || !data.text) {
+        const reason = data.error ?? `Error ${res.status}`;
+        setMessages(prev => [...prev, { role: "assistant", content: `No pude procesar tu mensaje (${reason}). Por favor intenta de nuevo.` }]);
+      } else {
         setMessages(prev => [...prev, { role: "assistant", content: data.text }]);
         if (data.leadReady) setLeadReady(true);
       }
-    } catch {
-      setMessages(prev => [...prev, { role: "assistant", content: "Hubo un problema al conectar. Por favor intenta de nuevo." }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: "assistant", content: `Error de conexión: ${err instanceof Error ? err.message : "intenta de nuevo"}` }]);
     } finally {
       setLoading(false);
     }
