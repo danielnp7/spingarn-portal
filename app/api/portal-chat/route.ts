@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
 const FIRM_SERVICES = `
 SERVICIOS DE SPINGARN INTEGRATED BUSINESS CONSULTING:
 
@@ -62,6 +60,7 @@ INSTRUCCIONES:
 `;
 
 export async function POST(req: NextRequest) {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
