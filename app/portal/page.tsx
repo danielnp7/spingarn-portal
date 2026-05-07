@@ -131,19 +131,36 @@ export default async function PortalHomePage() {
         </div>
       </div>
 
-      {/* CTA */}
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Link href="/portal/solicitudes"
-          className="rounded-xl p-5 transition-colors group border"
-          style={{ background: "#FFF0F8", borderColor: "#FFD6EE" }}>
-          <p className="font-semibold mb-1" style={{ color: "#7D0049" }}>Solicitar nuevo servicio</p>
-          <p className="text-sm" style={{ color: "#A3005F" }}>Envíanos un requerimiento y tu asesor lo atenderá a la brevedad.</p>
-        </Link>
-        <Link href="/portal/servicios"
-          className="bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl p-5 transition-colors group">
-          <p className="font-semibold text-gray-800 mb-1">Conoce nuestros servicios</p>
-          <p className="text-sm text-gray-500">Descubre todo lo que Spingarn puede hacer por tu empresa.</p>
-        </Link>
+      {/* Quick access */}
+      <div>
+        <h2 className="font-semibold text-gray-900 mb-3">Acceso rápido</h2>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Link href="/portal/documentos"
+            className="rounded-xl p-5 border hover:shadow-md transition-all flex items-start gap-3"
+            style={{ background: "#FFF0F8", borderColor: "#FFD6EE" }}>
+            <span className="text-2xl">🔒</span>
+            <div>
+              <p className="font-semibold text-sm mb-0.5" style={{ color: "#7D0049" }}>Mis Documentos</p>
+              <p className="text-xs" style={{ color: "#A3005F" }}>Archivos cifrados y acceso exclusivo a tu empresa.</p>
+            </div>
+          </Link>
+          <Link href="/portal/solicitudes"
+            className="rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all flex items-start gap-3 bg-white">
+            <span className="text-2xl">📋</span>
+            <div>
+              <p className="font-semibold text-sm text-gray-800 mb-0.5">Solicitar Servicio</p>
+              <p className="text-xs text-gray-500">Envíanos un requerimiento y tu asesor lo atenderá.</p>
+            </div>
+          </Link>
+          <Link href="/portal/servicios"
+            className="rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all flex items-start gap-3 bg-white">
+            <span className="text-2xl">💼</span>
+            <div>
+              <p className="font-semibold text-sm text-gray-800 mb-0.5">Nuestros Servicios</p>
+              <p className="text-xs text-gray-500">Descubre todo lo que Spingarn puede hacer por ti.</p>
+            </div>
+          </Link>
+        </div>
       </div>
     </div>
   );
