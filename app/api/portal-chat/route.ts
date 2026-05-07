@@ -48,21 +48,19 @@ TUS OBJETIVOS:
 2. Responder si Spingarn ofrece algún servicio específico que el cliente pregunte
 3. Hacer recomendaciones relevantes y explicarlas de forma sencilla
 4. Cuando identifiques una oportunidad clara de servicio adicional, mencionarla con naturalidad
-5. Ayudar a que el cliente entienda el valor que Spingarn puede agregar más allá de los proyectos actuales
 
 INSTRUCCIONES:
 - Sé conversacional, no uses listas largas ni lenguaje excesivamente técnico
 - Haz preguntas para entender mejor las necesidades
-- Cuando el cliente exprese interés concreto en un servicio o tenga una necesidad clara, incluye al final de tu respuesta exactamente esta línea: [LEAD_READY]
+- Cuando el cliente exprese interés concreto, incluye al final exactamente: [LEAD_READY]
 - Respuestas cortas y directas, máximo 3-4 párrafos
-- No inventes servicios que no están en la lista
-- Si el cliente pregunta algo fuera del alcance de Spingarn, dilo honestamente y sugiere alternativas dentro de lo que sí hacemos
 `;
 
 export async function POST(req: NextRequest) {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   try {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const supabase = await createClient();
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -72,23 +70,29 @@ export async function POST(req: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!profile?.client_id) return NextResponse.json({ error: "No client" }, { status: 403 });
+    const body = await req.json();
+    const messages: Anthropic.MessageParam[] = body.messages ?? [];
 
-    const [{ messages }, { data: clientRow }, { data: projects }] = await Promise.all([
-      req.json().then((b: { messages: Anthropic.MessageParam[] }) => b),
-      supabase.from("clients").select("name").eq("id", profile.client_id).single(),
-      supabase
-        .from("projects")
-        .select("name, status, area:areas(name), description")
-        .eq("client_id", profile.client_id)
-        .neq("status", "cancelado"),
-    ]);
+    let clientName = profile?.name ?? "Cliente";
+    let projectLines = "- Sin proyectos activos registrados";
 
-    const clientName = clientRow?.name ?? profile.name;
-    const projectLines = (projects ?? []).map((p: { name: string; status: string; area: unknown; description?: string }) => {
-      const area = (p.area as { name?: string } | null)?.name ?? "";
-      return `- ${p.name} (${area}, estado: ${p.status})${p.description ? ": " + p.description : ""}`;
-    }).join("\n") || "- Sin proyectos activos registrados";
+    if (profile?.client_id) {
+      const [{ data: clientRow }, { data: projects }] = await Promise.all([
+        supabase.from("clients").select("name").eq("id", profile.client_id).single(),
+        supabase
+          .from("projects")
+          .select("name, status, area:areas(name), description")
+          .eq("client_id", profile.client_id)
+          .neq("status", "cancelado"),
+      ]);
+      if (clientRow?.name) clientName = clientRow.name;
+      if (projects?.length) {
+        projectLines = projects.map((p: { name: string; status: string; area: unknown; description?: string }) => {
+          const area = (p.area as { name?: string } | null)?.name ?? "";
+          return `- ${p.name} (${area}, estado: ${p.status})`;
+        }).join("\n");
+      }
+    }
 
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -103,7 +107,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ text: cleanText, leadReady });
   } catch (err) {
-    console.error("portal-chat error", err);
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    console.error("portal-chat error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
