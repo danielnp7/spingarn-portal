@@ -251,21 +251,17 @@ export default function ServiciosPage() {
 
         <a
           href="/portal/solicitudes"
-          className="rounded-2xl border-2 bg-white p-5 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow"
+          className="sm:col-span-2 rounded-2xl border-2 bg-white p-8 shadow-sm flex flex-col items-center text-center hover:shadow-md transition-shadow"
           style={{ borderColor: "#C8007A" }}
         >
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-2xl">💬</span>
-              <h2 className="font-semibold text-sm" style={{ color: "#C8007A" }}>¿No encuentras lo que buscas?</h2>
-            </div>
-            <p className="text-sm text-gray-500 leading-relaxed">
-              Nuestra práctica va más allá de lo que cualquier lista puede resumir. Si tienes un reto específico,
-              cuéntanoslo: nuestro equipo de asesoría personalizada y enfoque 360° analizará tu caso y te
-              presentará la solución más adecuada.
-            </p>
-          </div>
-          <span className="mt-4 inline-block text-sm font-semibold" style={{ color: "#C8007A" }}>
+          <span className="text-3xl mb-3">💬</span>
+          <h2 className="font-semibold text-base mb-2" style={{ color: "#C8007A" }}>¿No encuentras lo que buscas?</h2>
+          <p className="text-sm text-gray-500 leading-relaxed max-w-lg">
+            Nuestra práctica va más allá de lo que cualquier lista puede resumir. Si tienes un reto específico,
+            cuéntanoslo: nuestro equipo de asesoría personalizada con enfoque 360° analizará tu caso y te
+            presentará la solución más adecuada.
+          </p>
+          <span className="mt-5 inline-block px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition" style={{ background: "#C8007A" }}>
             Hacer una solicitud →
           </span>
         </a>
@@ -275,17 +271,20 @@ export default function ServiciosPage() {
   );
 }
 
-function ServiceCard({ icon, title, description, items }: {
-  icon: string; title: string; description: string; items: string[];
+function ServiceCard({ icon, title, description, items, href = "/portal/solicitudes" }: {
+  icon: string; title: string; description: string; items: string[]; href?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+    <a
+      href={href}
+      className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm flex flex-col hover:shadow-md hover:border-pink-200 transition-all group"
+    >
       <div className="flex items-center gap-3 mb-3">
         <span className="text-2xl">{icon}</span>
-        <h2 className="font-semibold text-gray-900 text-sm">{title}</h2>
+        <h2 className="font-semibold text-gray-900 text-sm group-hover:text-pink-700 transition-colors">{title}</h2>
       </div>
-      <p className="text-sm text-gray-500 mb-3">{description}</p>
-      <ul className="space-y-1.5">
+      <p className="text-sm text-gray-500 mb-3 flex-1">{description}</p>
+      <ul className="space-y-1.5 mb-4">
         {items.map(item => (
           <li key={item} className="text-xs text-gray-500 flex items-start gap-2">
             <span className="mt-0.5" style={{ color: "#C8007A" }}>·</span>
@@ -293,6 +292,9 @@ function ServiceCard({ icon, title, description, items }: {
           </li>
         ))}
       </ul>
-    </div>
+      <span className="text-xs font-semibold transition-colors" style={{ color: "#C8007A" }}>
+        Solicitar este servicio →
+      </span>
+    </a>
   );
 }
