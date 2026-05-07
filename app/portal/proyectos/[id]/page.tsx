@@ -55,14 +55,25 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const { data: profile } = await supabase.from("profiles").select("client_id").eq("id", user.id).single();
   if (!profile?.client_id) redirect("/portal");
 
-  const { data: p } = await supabase
-    .from("projects")
-    .select("id, name, status, description, client_notes, value, billed, collected, start_date, deadline, leader_id, assigned_to, owner:profiles!owner_id(name), area:areas(name)")
-    .eq("id", id)
-    .eq("client_id", profile.client_id)
-    .single();
+  const [{ data: p }, { data: milestones }] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("id, name, status, description, client_notes, value, billed, collected, start_date, deadline, leader_id, assigned_to, owner:profiles!owner_id(name), area:areas(name)")
+      .eq("id", id)
+      .eq("client_id", profile.client_id)
+      .single(),
+    supabase
+      .from("milestones")
+      .select("id, title, description, due_date, status, order")
+      .eq("project_id", id)
+      .order("order", { ascending: true })
+      .order("created_at", { ascending: true }),
+  ]);
 
   if (!p) notFound();
+
+  type Milestone = { id: string; title: string; description?: string; due_date?: string; status: string; order: number };
+  const milestoneList: Milestone[] = (milestones ?? []) as Milestone[];
 
   // Resolve gestor (leader_id → assigned_to) and responsable (owner)
   const gestorId = (p as typeof p & { leader_id?: string; assigned_to?: string }).leader_id
@@ -137,6 +148,46 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
       </div>
+
+      {/* Milestones */}
+      {milestoneList.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">Hitos del Proyecto</h2>
+          <ol className="space-y-3">
+            {milestoneList.map((m, i) => {
+              const done = m.status === "completado";
+              const inProgress = m.status === "en_progreso";
+              return (
+                <li key={m.id} className="flex items-start gap-3">
+                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 border-2 ${
+                    done        ? "border-[#C8007A] bg-[#C8007A] text-white"
+                    : inProgress ? "border-[#C8007A] bg-white text-[#C8007A]"
+                    : "border-gray-200 bg-white text-gray-300"
+                  }`}>
+                    {done ? "✓" : i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-sm font-medium ${done ? "line-through text-gray-400" : "text-gray-900"}`}>
+                        {m.title}
+                      </p>
+                      {m.due_date && (
+                        <span className="text-xs text-gray-400 flex-shrink-0">{fmtDate(m.due_date)}</span>
+                      )}
+                    </div>
+                    {m.description && (
+                      <p className="text-xs text-gray-400 mt-0.5">{m.description}</p>
+                    )}
+                    {inProgress && (
+                      <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">En progreso</span>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
 
       {/* Financials */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
