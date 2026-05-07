@@ -249,16 +249,27 @@ export default function ServiciosPage() {
           ]}
         />
 
-      </div>
-
-      <div className="rounded-2xl p-6 text-white text-center" style={{ background: "linear-gradient(135deg, #C8007A 0%, #7D0049 100%)" }}>
-        <h2 className="font-bold text-lg mb-2">¿Necesitas algo específico?</h2>
-        <p className="text-sm mb-4" style={{ color: "#FFD6EE" }}>Nuestro equipo puede atender requerimientos a medida.</p>
-        <a href="/portal/solicitudes"
-          className="inline-block px-6 py-2.5 bg-white rounded-xl text-sm font-semibold hover:bg-pink-50 transition"
-          style={{ color: "#C8007A" }}>
-          Hacer una solicitud →
+        <a
+          href="/portal/solicitudes"
+          className="rounded-2xl border-2 bg-white p-5 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow"
+          style={{ borderColor: "#C8007A" }}
+        >
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">💬</span>
+              <h2 className="font-semibold text-sm" style={{ color: "#C8007A" }}>¿No encuentras lo que buscas?</h2>
+            </div>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              Nuestra práctica va más allá de lo que cualquier lista puede resumir. Si tienes un reto específico,
+              cuéntanoslo: nuestro equipo de asesoría personalizada y enfoque 360° analizará tu caso y te
+              presentará la solución más adecuada.
+            </p>
+          </div>
+          <span className="mt-4 inline-block text-sm font-semibold" style={{ color: "#C8007A" }}>
+            Hacer una solicitud →
+          </span>
         </a>
+
       </div>
     </div>
   );
