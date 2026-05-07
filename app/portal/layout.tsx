@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import PortalNav from "./PortalNav";
+import PortalChatbot from "./PortalChatbot";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -29,6 +30,7 @@ export default async function PortalLayout({ children }: { children: React.React
       <footer className="text-center text-xs text-gray-400 py-6 border-t border-gray-100">
         © {new Date().getFullYear()} Spingarn Integrated Business Consulting
       </footer>
+      <PortalChatbot />
     </div>
   );
 }
