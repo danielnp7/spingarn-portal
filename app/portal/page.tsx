@@ -87,31 +87,29 @@ export default async function PortalHomePage() {
     }
   }
 
-  // Fetch next milestone per project (one per project, soonest first)
+  // Fetch ALL pending milestones for all active projects
   type Milestone = { id: string; title: string; due_date: string | null; status: string; project_id: string };
-  type MilestoneWithProject = Milestone & { projectName: string };
-  let upcomingMilestones: MilestoneWithProject[] = [];
+  type MilestonesByProject = Record<string, Milestone[]>;
+  let milestonesByProject: MilestonesByProject = {};
+  let nextMilestone: (Milestone & { projectName: string }) | null = null;
+
   if (projects && projects.length > 0) {
-    const projectIds = projects.map(p => p.id);
     const { data: milestones } = await supabase
       .from("milestones")
       .select("id, title, due_date, status, project_id")
-      .in("project_id", projectIds)
+      .in("project_id", projects.map(p => p.id))
       .neq("status", "completado")
-      .not("due_date", "is", null)
-      .order("due_date", { ascending: true });
+      .order("due_date", { ascending: true, nullsFirst: false });
 
     if (milestones) {
-      // Keep the soonest milestone per project
-      const seen = new Set<string>();
-      upcomingMilestones = (milestones as Milestone[])
-        .filter(m => { if (seen.has(m.project_id)) return false; seen.add(m.project_id); return true; })
-        .map(m => ({ ...m, projectName: projects.find(p => p.id === m.project_id)?.name ?? "" }));
+      for (const m of milestones as Milestone[]) {
+        if (!milestonesByProject[m.project_id]) milestonesByProject[m.project_id] = [];
+        milestonesByProject[m.project_id].push(m);
+      }
+      const first = (milestones as Milestone[]).find(m => m.due_date);
+      if (first) nextMilestone = { ...first, projectName: projects.find(p => p.id === first.project_id)?.name ?? "" };
     }
   }
-
-
-  const nextMilestone = upcomingMilestones[0] ?? null;
 
   // Stats
   const activeCount    = (projects ?? []).filter(p => ["aprobado", "en_ejecucion"].includes(p.status)).length;
@@ -197,15 +195,39 @@ export default async function PortalHomePage() {
                       <span key={s} className="text-[9px]" style={{ color: i <= stepIdx ? "#C8007A" : "#D1D5DB" }}>{s}</span>
                     ))}
                   </div>
+                  {/* Milestones for this project */}
+                  {(milestonesByProject[p.id] ?? []).length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-50">
+                      <p className="text-xs font-semibold text-gray-400 mb-2">🎯 Hitos pendientes</p>
+                      <ul className="space-y-1.5">
+                        {(milestonesByProject[p.id] ?? []).slice(0, 3).map(m => {
+                          const urgency = m.due_date ? daysUntil(m.due_date) : null;
+                          return (
+                            <li key={m.id} className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-gray-600 truncate">{m.title}</span>
+                              {m.due_date && urgency && (
+                                <span className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0" style={{ color: urgency.color, background: urgency.bg }}>
+                                  {fmtDate(m.due_date)}
+                                </span>
+                              )}
+                            </li>
+                          );
+                        })}
+                        {(milestonesByProject[p.id] ?? []).length > 3 && (
+                          <p className="text-xs text-gray-400">+{(milestonesByProject[p.id] ?? []).length - 3} más →</p>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Advisor note */}
                   {p.client_notes && (
                     <div className="mt-3 pt-3 border-t border-gray-50 flex items-start gap-2">
                       <span className="text-xs mt-0.5">💬</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold mb-0.5" style={{ color: "#C8007A" }}>Mensaje de tu asesor</p>
                         <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{p.client_notes}</p>
-                        <span className="text-xs font-medium mt-1 inline-block" style={{ color: "#C8007A" }}>
-                          Ver completo →
-                        </span>
+                        <span className="text-xs font-medium mt-1 inline-block" style={{ color: "#C8007A" }}>Ver completo →</span>
                       </div>
                     </div>
                   )}
@@ -218,26 +240,16 @@ export default async function PortalHomePage() {
         {/* Right sidebar — 1/3 */}
         <div className="space-y-4">
 
-          {/* Upcoming milestones — one per project */}
-          {upcomingMilestones.length > 0 && (
+          {/* Next milestone summary — soonest across all projects */}
+          {nextMilestone && (
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">🎯 Próximos Hitos</p>
-              <ul className="space-y-3">
-                {upcomingMilestones.map(m => {
-                  const { label, color, bg } = m.due_date ? daysUntil(m.due_date) : { label: "", color: "#6B7280", bg: "#F9FAFB" };
-                  return (
-                    <li key={m.id} className="border-b border-gray-50 last:border-0 pb-3 last:pb-0">
-                      <p className="text-xs text-gray-400 truncate mb-0.5">{m.projectName}</p>
-                      <p className="text-sm font-medium text-gray-800 mb-1.5">{m.title}</p>
-                      {m.due_date && (
-                        <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color, background: bg }}>
-                          {fmtDate(m.due_date)} · {label}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">🎯 Hito más próximo</p>
+              <p className="text-xs text-gray-400 truncate mb-0.5">{nextMilestone.projectName}</p>
+              <p className="text-sm font-semibold text-gray-900 mb-2">{nextMilestone.title}</p>
+              {nextMilestone.due_date && (() => {
+                const { label, color, bg } = daysUntil(nextMilestone.due_date);
+                return <span className="inline-flex text-xs font-semibold px-2.5 py-1 rounded-full" style={{ color, background: bg }}>📅 {fmtDate(nextMilestone.due_date)} · {label}</span>;
+              })()}
             </div>
           )}
 
