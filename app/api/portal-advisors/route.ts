@@ -33,18 +33,22 @@ export async function GET() {
 
   // Fetch emails from auth.users via admin client
   const admin = adminClient();
-  const { data: { users: authUsers } } = await admin.auth.admin.listUsers({ perPage: 1000 });
-
-  const emailMap = Object.fromEntries(
-    (authUsers ?? []).map(u => [u.id, u.email ?? ""])
-  );
+  let emailMap: Record<string, string> = {};
+  try {
+    const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    emailMap = Object.fromEntries(
+      (authData?.users ?? []).map(u => [u.id, u.email ?? ""])
+    );
+  } catch (e) {
+    console.error("listUsers error", e);
+  }
 
   const result = advisors.map(a => ({
     id: a.id,
     name: a.name,
     email: emailMap[a.id] ?? "",
     role: a.role,
-  })).filter(a => a.email);
+  }));
 
   return NextResponse.json(result);
 }

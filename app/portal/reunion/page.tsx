@@ -111,40 +111,23 @@ export default function ReunionPage() {
 
         {/* Advisor selector */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Asesor</label>
-          {loadingAdvisors ? (
-            <div className="text-sm text-gray-400 py-3">Cargando asesores...</div>
-          ) : (
-            <div className="grid gap-2">
-              {advisors.map(a => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => setAdvisorId(a.id)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all"
-                  style={advisorId === a.id
-                    ? { borderColor: "#C8007A", background: "#FFF0F8" }
-                    : { borderColor: "#E5E7EB", background: "white" }
-                  }
-                >
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                    style={{ background: "#C8007A" }}>
-                    {a.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">{a.name}</p>
-                    <p className="text-xs text-gray-400">{ROLE_LABEL[a.role] ?? a.role} · {a.email}</p>
-                  </div>
-                  {advisorId === a.id && (
-                    <span className="text-sm flex-shrink-0" style={{ color: "#C8007A" }}>✓</span>
-                  )}
-                </button>
-              ))}
-              {advisors.length === 0 && (
-                <p className="text-sm text-gray-400 py-2">No hay asesores disponibles en este momento.</p>
-              )}
-            </div>
-          )}
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Asesor</label>
+          <select
+            value={advisorId}
+            onChange={e => setAdvisorId(e.target.value)}
+            required
+            disabled={loadingAdvisors}
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none bg-white disabled:text-gray-400"
+            onFocus={e => e.target.style.boxShadow = "0 0 0 2px #C8007A40"}
+            onBlur={e => e.target.style.boxShadow = "none"}
+          >
+            <option value="">{loadingAdvisors ? "Cargando asesores..." : "Selecciona un asesor"}</option>
+            {advisors.map(a => (
+              <option key={a.id} value={a.id}>
+                {a.name} — {ROLE_LABEL[a.role] ?? a.role}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Topic */}
