@@ -253,16 +253,20 @@ export default async function PortalHomePage() {
           {/* Quick access */}
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Acceso rápido</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="flex flex-col gap-2">
               {[
-                { href: "/portal/documentos", icon: "🔒", label: "Documentos" },
-                { href: "/portal/solicitudes", icon: "📋", label: "Solicitar" },
-                { href: "/portal/servicios",   icon: "💼", label: "Servicios" },
+                { href: "/portal/documentos", icon: "🔒", label: "Mis Documentos", sub: "Archivos cifrados" },
+                { href: "/portal/solicitudes", icon: "📋", label: "Solicitar Servicio", sub: "Nuevo requerimiento" },
+                { href: "/portal/servicios",   icon: "💼", label: "Nuestros Servicios", sub: "Todo lo que hacemos" },
               ].map(item => (
                 <Link key={item.href} href={item.href}
-                  className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-white border border-gray-100 hover:border-pink-200 hover:shadow-sm transition-all text-center">
-                  <span className="text-2xl">{item.icon}</span>
-                  <p className="text-xs font-semibold text-gray-700 leading-tight">{item.label}</p>
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white border border-gray-100 hover:border-pink-200 hover:shadow-sm transition-all">
+                  <span className="text-lg flex-shrink-0">{item.icon}</span>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-800">{item.label}</p>
+                    <p className="text-[11px] text-gray-400">{item.sub}</p>
+                  </div>
+                  <span className="ml-auto text-gray-300 text-xs">→</span>
                 </Link>
               ))}
             </div>
