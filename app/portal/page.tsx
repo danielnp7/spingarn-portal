@@ -155,8 +155,8 @@ export default async function PortalHomePage() {
       {/* Main content — two columns on desktop */}
       <div className="grid lg:grid-cols-3 gap-5">
 
-        {/* Projects — takes 2/3 */}
-        <div className="lg:col-span-2 space-y-3">
+        {/* Projects — full width rows, each with side cards */}
+        <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Proyectos en curso</h2>
             <Link href="/portal/proyectos" className="text-xs hover:underline" style={{ color: "#C8007A" }}>Ver todos →</Link>
@@ -173,65 +173,70 @@ export default async function PortalHomePage() {
               const stepIdx = Math.max(0, STEP_KEYS.indexOf(p.status));
               const pct = (stepIdx / (STEPS_LEN - 1)) * 100;
               const ownerName = (p.owner as { name?: string } | null)?.name ?? "—";
+              const pMilestones = milestonesByProject[p.id] ?? [];
+
               return (
-                <Link key={p.id} href={`/portal/proyectos/${p.id}`} className="block bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md hover:border-pink-100 transition-all">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm truncate">{p.name}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Responsable: <span className="text-gray-600">{ownerName}</span>
-                        {p.deadline && <span> · Entrega: <span className="text-gray-600">{fmtDate(p.deadline)}</span></span>}
-                      </p>
+                <div key={p.id} className="grid sm:grid-cols-5 gap-3 items-start">
+
+                  {/* Project card — 3/5 */}
+                  <Link href={`/portal/proyectos/${p.id}`} className="sm:col-span-3 block bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md hover:border-pink-100 transition-all">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm truncate">{p.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Responsable: <span className="text-gray-600">{ownerName}</span>
+                          {p.deadline && <span> · Entrega: <span className="text-gray-600">{fmtDate(p.deadline)}</span></span>}
+                        </p>
+                      </div>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${statusColor(p.status)}`}>
+                        {statusLabel(p.status)}
+                      </span>
                     </div>
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${statusColor(p.status)}`}>
-                      {statusLabel(p.status)}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "#C8007A" }} />
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    {["Propuesta", "Aprobado", "Ejecución", "Entregado", "Finalizado"].map((s, i) => (
-                      <span key={s} className="text-[9px]" style={{ color: i <= stepIdx ? "#C8007A" : "#D1D5DB" }}>{s}</span>
-                    ))}
-                  </div>
-                  {/* Milestones for this project */}
-                  {(milestonesByProject[p.id] ?? []).length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-50">
-                      <p className="text-xs font-semibold text-gray-400 mb-2">🎯 Hitos pendientes</p>
-                      <ul className="space-y-1.5">
-                        {(milestonesByProject[p.id] ?? []).slice(0, 3).map(m => {
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "#C8007A" }} />
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      {["Propuesta", "Aprobado", "Ejecución", "Entregado", "Finalizado"].map((s, i) => (
+                        <span key={s} className="text-[9px]" style={{ color: i <= stepIdx ? "#C8007A" : "#D1D5DB" }}>{s}</span>
+                      ))}
+                    </div>
+                    {p.client_notes && (
+                      <div className="mt-3 pt-3 border-t border-gray-50 flex items-start gap-2">
+                        <span className="text-sm flex-shrink-0">💬</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold mb-0.5" style={{ color: "#C8007A" }}>Mensaje de tu asesor</p>
+                          <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{p.client_notes}</p>
+                          <span className="text-xs font-medium mt-0.5 inline-block" style={{ color: "#C8007A" }}>Ver completo →</span>
+                        </div>
+                      </div>
+                    )}
+                  </Link>
+
+                  {/* Milestones card — 2/5 */}
+                  <div className="sm:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-4 h-full">
+                    <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">🎯 Hitos pendientes</p>
+                    {pMilestones.length === 0 ? (
+                      <p className="text-xs text-gray-300 italic">Sin hitos registrados</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {pMilestones.map(m => {
                           const urgency = m.due_date ? daysUntil(m.due_date) : null;
                           return (
-                            <li key={m.id} className="flex items-center justify-between gap-2">
-                              <span className="text-xs text-gray-600 truncate">{m.title}</span>
+                            <li key={m.id} className="flex items-start justify-between gap-2">
+                              <span className="text-xs text-gray-700 leading-relaxed">{m.title}</span>
                               {m.due_date && urgency && (
-                                <span className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0" style={{ color: urgency.color, background: urgency.bg }}>
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap" style={{ color: urgency.color, background: urgency.bg }}>
                                   {fmtDate(m.due_date)}
                                 </span>
                               )}
                             </li>
                           );
                         })}
-                        {(milestonesByProject[p.id] ?? []).length > 3 && (
-                          <p className="text-xs text-gray-400">+{(milestonesByProject[p.id] ?? []).length - 3} más →</p>
-                        )}
                       </ul>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* Advisor note */}
-                  {p.client_notes && (
-                    <div className="mt-3 pt-3 border-t border-gray-50 flex items-start gap-2">
-                      <span className="text-xs mt-0.5">💬</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold mb-0.5" style={{ color: "#C8007A" }}>Mensaje de tu asesor</p>
-                        <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{p.client_notes}</p>
-                        <span className="text-xs font-medium mt-1 inline-block" style={{ color: "#C8007A" }}>Ver completo →</span>
-                      </div>
-                    </div>
-                  )}
-                </Link>
+                </div>
               );
             })
           )}
