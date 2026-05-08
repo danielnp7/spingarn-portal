@@ -110,8 +110,6 @@ export default async function PortalHomePage() {
     }
   }
 
-  // Advisor notes — all projects that have notes
-  const noteProjects = (projects ?? []).filter(p => p.client_notes);
 
   const nextMilestone = upcomingMilestones[0] ?? null;
 
@@ -199,6 +197,18 @@ export default async function PortalHomePage() {
                       <span key={s} className="text-[9px]" style={{ color: i <= stepIdx ? "#C8007A" : "#D1D5DB" }}>{s}</span>
                     ))}
                   </div>
+                  {p.client_notes && (
+                    <div className="mt-3 pt-3 border-t border-gray-50 flex items-start gap-2">
+                      <span className="text-xs mt-0.5">💬</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold mb-0.5" style={{ color: "#C8007A" }}>Mensaje de tu asesor</p>
+                        <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{p.client_notes}</p>
+                        <span className="text-xs font-medium mt-1 inline-block" style={{ color: "#C8007A" }}>
+                          Ver completo →
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </Link>
               );
             })
@@ -231,23 +241,6 @@ export default async function PortalHomePage() {
             </div>
           )}
 
-          {/* Advisor notes — one card per project that has notes */}
-          {noteProjects.length > 0 && (
-            <div className="rounded-xl border p-4" style={{ background: "#FFF0F8", borderColor: "#FFD6EE" }}>
-              <p className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: "#C8007A" }}>💬 Mensajes de tu asesor</p>
-              <ul className="space-y-3">
-                {noteProjects.map(p => (
-                  <li key={p.id} className="border-b last:border-0 pb-3 last:pb-0" style={{ borderColor: "#FFD6EE" }}>
-                    <p className="text-xs font-semibold truncate mb-1" style={{ color: "#7D0049" }}>{p.name}</p>
-                    <p className="text-xs text-gray-700 leading-relaxed line-clamp-3">{p.client_notes}</p>
-                    <Link href={`/portal/proyectos/${p.id}`} className="text-xs font-medium mt-1 inline-block hover:underline" style={{ color: "#C8007A" }}>
-                      Ver proyecto →
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           {/* Pending invoice alert */}
           {pendingAmount > 0 && (
