@@ -255,7 +255,9 @@ export default async function PortalHomePage() {
             <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Acceso rápido</p>
             <div className="flex flex-col gap-2">
               {[
-                { href: "/portal/documentos", icon: "🔒", label: "Mis Documentos", sub: "Archivos cifrados" },
+                { href: "/portal/facturas",    icon: "🧾", label: "Mis Facturas",       sub: "Estado de pagos" },
+                { href: "/portal/reunion",     icon: "📅", label: "Agendar Reunión",    sub: "Hablar con tu asesor" },
+                { href: "/portal/documentos",  icon: "🔒", label: "Mis Documentos",     sub: "Archivos cifrados" },
                 { href: "/portal/solicitudes", icon: "📋", label: "Solicitar Servicio", sub: "Nuevo requerimiento" },
                 { href: "/portal/servicios",   icon: "💼", label: "Nuestros Servicios", sub: "Todo lo que hacemos" },
               ].map(item => (
