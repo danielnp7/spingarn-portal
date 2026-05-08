@@ -122,5 +122,39 @@ export async function POST(req: NextRequest) {
     replyTo: user.email,
   });
 
+  // Push notification to advisor in hub (best-effort)
+  try {
+    const vapidPublic  = process.env.VAPID_PUBLIC_KEY;
+    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+    const fromEmail    = process.env.RESEND_FROM_EMAIL ?? "noreply@spingarn.ec";
+
+    if (vapidPublic && vapidPrivate) {
+      const { data: subs } = await admin
+        .from("push_subscriptions")
+        .select("endpoint, p256dh, auth")
+        .eq("user_id", advisor_id);
+
+      if (subs && subs.length > 0) {
+        const webpush = await import("web-push");
+        webpush.default.setVapidDetails(`mailto:${fromEmail}`, vapidPublic, vapidPrivate);
+        const payload = JSON.stringify({
+          title: "Nueva solicitud de reunión",
+          body: `${clientCompany} quiere reunirse: ${topic}`,
+          href: "/reuniones",
+        });
+        await Promise.allSettled(
+          subs.map(sub =>
+            webpush.default.sendNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              payload
+            )
+          )
+        );
+      }
+    }
+  } catch (e) {
+    console.error("push notification error", e);
+  }
+
   return NextResponse.json({ ok: true, id: request?.id });
 }
