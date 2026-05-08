@@ -251,23 +251,21 @@ export default async function PortalHomePage() {
           )}
 
           {/* Quick access */}
-          <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-400 text-center">Acceso rápido</p>
-            {[
-              { href: "/portal/documentos", icon: "🔒", label: "Mis Documentos", sub: "Archivos cifrados de tus proyectos" },
-              { href: "/portal/solicitudes", icon: "📋", label: "Solicitar Servicio", sub: "Nuevo requerimiento" },
-              { href: "/portal/servicios",   icon: "💼", label: "Nuestros Servicios", sub: "Todo lo que hacemos" },
-            ].map(item => (
-              <Link key={item.href} href={item.href}
-                className="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100 hover:border-pink-200 hover:shadow-sm transition-all">
-                <span className="text-xl w-8 text-center flex-shrink-0">{item.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-gray-800">{item.label}</p>
-                  <p className="text-xs text-gray-400">{item.sub}</p>
-                </div>
-                <span className="text-gray-300 text-sm flex-shrink-0">→</span>
-              </Link>
-            ))}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Acceso rápido</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { href: "/portal/documentos", icon: "🔒", label: "Documentos" },
+                { href: "/portal/solicitudes", icon: "📋", label: "Solicitar" },
+                { href: "/portal/servicios",   icon: "💼", label: "Servicios" },
+              ].map(item => (
+                <Link key={item.href} href={item.href}
+                  className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-white border border-gray-100 hover:border-pink-200 hover:shadow-sm transition-all text-center">
+                  <span className="text-2xl">{item.icon}</span>
+                  <p className="text-xs font-semibold text-gray-700 leading-tight">{item.label}</p>
+                </Link>
+              ))}
+            </div>
           </div>
 
         </div>
