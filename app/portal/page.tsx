@@ -87,9 +87,10 @@ export default async function PortalHomePage() {
     }
   }
 
-  // Fetch next milestone across all active projects
+  // Fetch next milestone per project (one per project, soonest first)
   type Milestone = { id: string; title: string; due_date: string | null; status: string; project_id: string };
-  let nextMilestone: (Milestone & { projectName: string }) | null = null;
+  type MilestoneWithProject = Milestone & { projectName: string };
+  let upcomingMilestones: MilestoneWithProject[] = [];
   if (projects && projects.length > 0) {
     const projectIds = projects.map(p => p.id);
     const { data: milestones } = await supabase
@@ -98,18 +99,21 @@ export default async function PortalHomePage() {
       .in("project_id", projectIds)
       .neq("status", "completado")
       .not("due_date", "is", null)
-      .order("due_date", { ascending: true })
-      .limit(1);
+      .order("due_date", { ascending: true });
 
-    if (milestones && milestones.length > 0) {
-      const m = milestones[0] as Milestone;
-      const proj = projects.find(p => p.id === m.project_id);
-      nextMilestone = { ...m, projectName: proj?.name ?? "" };
+    if (milestones) {
+      // Keep the soonest milestone per project
+      const seen = new Set<string>();
+      upcomingMilestones = (milestones as Milestone[])
+        .filter(m => { if (seen.has(m.project_id)) return false; seen.add(m.project_id); return true; })
+        .map(m => ({ ...m, projectName: projects.find(p => p.id === m.project_id)?.name ?? "" }));
     }
   }
 
-  // Advisor notes from most recently updated project
-  const noteProject = (projects ?? []).find(p => p.client_notes);
+  // Advisor notes — all projects that have notes
+  const noteProjects = (projects ?? []).filter(p => p.client_notes);
+
+  const nextMilestone = upcomingMilestones[0] ?? null;
 
   // Stats
   const activeCount    = (projects ?? []).filter(p => ["aprobado", "en_ejecucion"].includes(p.status)).length;
@@ -204,31 +208,44 @@ export default async function PortalHomePage() {
         {/* Right sidebar — 1/3 */}
         <div className="space-y-4">
 
-          {/* Next milestone */}
-          {nextMilestone && (
+          {/* Upcoming milestones — one per project */}
+          {upcomingMilestones.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">🎯 Próximo Hito</p>
-              <p className="text-sm font-semibold text-gray-900 mb-1">{nextMilestone.title}</p>
-              <p className="text-xs text-gray-400 truncate mb-2">{nextMilestone.projectName}</p>
-              {nextMilestone.due_date && (() => {
-                const { label, color, bg } = daysUntil(nextMilestone.due_date);
-                return (
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full" style={{ color, background: bg }}>
-                    📅 {fmtDate(nextMilestone.due_date)} · {label}
-                  </span>
-                );
-              })()}
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">🎯 Próximos Hitos</p>
+              <ul className="space-y-3">
+                {upcomingMilestones.map(m => {
+                  const { label, color, bg } = m.due_date ? daysUntil(m.due_date) : { label: "", color: "#6B7280", bg: "#F9FAFB" };
+                  return (
+                    <li key={m.id} className="border-b border-gray-50 last:border-0 pb-3 last:pb-0">
+                      <p className="text-xs text-gray-400 truncate mb-0.5">{m.projectName}</p>
+                      <p className="text-sm font-medium text-gray-800 mb-1.5">{m.title}</p>
+                      {m.due_date && (
+                        <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full" style={{ color, background: bg }}>
+                          {fmtDate(m.due_date)} · {label}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 
-          {/* Advisor note */}
-          {noteProject && (
+          {/* Advisor notes — one card per project that has notes */}
+          {noteProjects.length > 0 && (
             <div className="rounded-xl border p-4" style={{ background: "#FFF0F8", borderColor: "#FFD6EE" }}>
-              <p className="text-xs font-bold uppercase tracking-wide mb-2" style={{ color: "#C8007A" }}>💬 Mensaje de tu asesor</p>
-              <p className="text-xs text-gray-700 leading-relaxed line-clamp-4">{noteProject.client_notes}</p>
-              <Link href={`/portal/proyectos/${noteProject.id}`} className="text-xs font-medium mt-2 inline-block hover:underline" style={{ color: "#C8007A" }}>
-                Ver proyecto →
-              </Link>
+              <p className="text-xs font-bold uppercase tracking-wide mb-3" style={{ color: "#C8007A" }}>💬 Mensajes de tu asesor</p>
+              <ul className="space-y-3">
+                {noteProjects.map(p => (
+                  <li key={p.id} className="border-b last:border-0 pb-3 last:pb-0" style={{ borderColor: "#FFD6EE" }}>
+                    <p className="text-xs font-semibold truncate mb-1" style={{ color: "#7D0049" }}>{p.name}</p>
+                    <p className="text-xs text-gray-700 leading-relaxed line-clamp-3">{p.client_notes}</p>
+                    <Link href={`/portal/proyectos/${p.id}`} className="text-xs font-medium mt-1 inline-block hover:underline" style={{ color: "#C8007A" }}>
+                      Ver proyecto →
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
