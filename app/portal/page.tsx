@@ -91,7 +91,6 @@ export default async function PortalHomePage() {
   type Milestone = { id: string; title: string; due_date: string | null; status: string; project_id: string };
   type MilestonesByProject = Record<string, Milestone[]>;
   let milestonesByProject: MilestonesByProject = {};
-  let nextMilestone: (Milestone & { projectName: string }) | null = null;
 
   if (projects && projects.length > 0) {
     const { data: milestones } = await supabase
@@ -106,8 +105,6 @@ export default async function PortalHomePage() {
         if (!milestonesByProject[m.project_id]) milestonesByProject[m.project_id] = [];
         milestonesByProject[m.project_id].push(m);
       }
-      const first = (milestones as Milestone[]).find(m => m.due_date);
-      if (first) nextMilestone = { ...first, projectName: projects.find(p => p.id === first.project_id)?.name ?? "" };
     }
   }
 
@@ -143,13 +140,7 @@ export default async function PortalHomePage() {
           small
           alert={overdueCount > 0 ? `${overdueCount} vencida${overdueCount > 1 ? "s" : ""}` : undefined}
         />
-        <StatCard
-          label="Próximo hito"
-          value={nextMilestone?.due_date ? fmtDate(nextMilestone.due_date) : "—"}
-          icon="🎯"
-          accent="#2563EB"
-          small
-        />
+        <StatCard label="En ejecución" value={(projects ?? []).filter(p => p.status === "en_ejecucion").length} icon="⚙" accent="#2563EB" />
       </div>
 
       {/* Main content — two columns on desktop */}
@@ -245,20 +236,6 @@ export default async function PortalHomePage() {
         {/* Right sidebar — 1/3 */}
         <div className="space-y-4">
 
-          {/* Next milestone summary — soonest across all projects */}
-          {nextMilestone && (
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">🎯 Hito más próximo</p>
-              <p className="text-xs text-gray-400 truncate mb-0.5">{nextMilestone.projectName}</p>
-              <p className="text-sm font-semibold text-gray-900 mb-2">{nextMilestone.title}</p>
-              {nextMilestone.due_date && (() => {
-                const { label, color, bg } = daysUntil(nextMilestone.due_date);
-                return <span className="inline-flex text-xs font-semibold px-2.5 py-1 rounded-full" style={{ color, background: bg }}>📅 {fmtDate(nextMilestone.due_date)} · {label}</span>;
-              })()}
-            </div>
-          )}
-
-
           {/* Pending invoice alert */}
           {pendingAmount > 0 && (
             <div className={`rounded-xl border p-4 ${overdueCount > 0 ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100"}`}>
@@ -275,7 +252,7 @@ export default async function PortalHomePage() {
 
           {/* Quick access */}
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Acceso rápido</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-400 text-center">Acceso rápido</p>
             {[
               { href: "/portal/documentos", icon: "🔒", label: "Mis Documentos", sub: "Archivos cifrados de tus proyectos" },
               { href: "/portal/solicitudes", icon: "📋", label: "Solicitar Servicio", sub: "Nuevo requerimiento" },
@@ -283,12 +260,12 @@ export default async function PortalHomePage() {
             ].map(item => (
               <Link key={item.href} href={item.href}
                 className="flex items-center gap-3 p-3 rounded-xl bg-white border border-gray-100 hover:border-pink-200 hover:shadow-sm transition-all">
-                <span className="text-lg">{item.icon}</span>
+                <span className="text-xl w-8 text-center flex-shrink-0">{item.icon}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-gray-800">{item.label}</p>
                   <p className="text-xs text-gray-400">{item.sub}</p>
                 </div>
-                <span className="text-gray-300 text-sm">→</span>
+                <span className="text-gray-300 text-sm flex-shrink-0">→</span>
               </Link>
             ))}
           </div>
