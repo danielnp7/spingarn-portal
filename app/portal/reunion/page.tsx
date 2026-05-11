@@ -85,7 +85,8 @@ export default function ReunionPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!advisorId || !topic) return;
+    if (!advisorId) { setError("Selecciona un asesor"); return; }
+    if (!topic.trim()) { setError("Escribe el tema de la reunión"); return; }
     setSubmitting(true);
     setError("");
 
@@ -152,7 +153,7 @@ export default function ReunionPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-6">
+      <form onSubmit={handleSubmit} noValidate className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 space-y-6">
 
         {/* Advisor */}
         <div>
@@ -160,7 +161,6 @@ export default function ReunionPage() {
           <select
             value={advisorId}
             onChange={e => setAdvisorId(e.target.value)}
-            required
             disabled={loadingAdvisors}
             style={inputStyle}
             onFocus={e => e.target.style.boxShadow = "0 0 0 2px #C8007A40"}
@@ -180,7 +180,6 @@ export default function ReunionPage() {
             type="text"
             value={topic}
             onChange={e => setTopic(e.target.value)}
-            required
             placeholder="Ej: Revisión de estados financieros Q1, seguimiento de propuesta..."
             style={inputStyle}
             onFocus={e => e.target.style.boxShadow = "0 0 0 2px #C8007A40"}
