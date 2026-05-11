@@ -2,19 +2,33 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useState, useEffect } from "react";
+
 const NAV = [
-  { href: "/portal", label: "Inicio" },
-  { href: "/portal/proyectos", label: "Mis Proyectos" },
-  { href: "/portal/facturas", label: "Facturas" },
-  { href: "/portal/documentos", label: "Documentos" },
-  { href: "/portal/reunion", label: "Agendar Reunión" },
+  { href: "/portal",             label: "Inicio" },
+  { href: "/portal/proyectos",   label: "Mis Proyectos" },
+  { href: "/portal/facturas",    label: "Facturas" },
+  { href: "/portal/mis-reuniones", label: "Mis Reuniones" },
+  { href: "/portal/documentos",  label: "Documentos" },
+  { href: "/portal/reunion",     label: "Agendar Reunión" },
   { href: "/portal/solicitudes", label: "Solicitar Servicio" },
-  { href: "/portal/servicios", label: "Nuestros Servicios" },
+  { href: "/portal/servicios",   label: "Nuestros Servicios" },
 ];
 
 export default function PortalNav({ userName, clientName, userId }: { userName: string; clientName: string; userId: string }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [pendingMeetings, setPendingMeetings] = useState(0);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("meeting_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("client_user_id", userId)
+      .eq("status", "pendiente")
+      .then(({ count }) => setPendingMeetings(count ?? 0));
+  }, [userId, pathname]);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -38,20 +52,25 @@ export default function PortalNav({ userName, clientName, userId }: { userName: 
         </div>
 
         <nav className="flex-1 flex items-center gap-1 overflow-x-auto">
-          {NAV.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
-              style={
-                pathname === item.href
-                  ? { background: "#FFF0F8", color: "#C8007A" }
-                  : { color: "#6B7280" }
-              }
-            >
-              {item.label}
-            </Link>
-          ))}
+          {NAV.map(item => {
+            const active = pathname === item.href;
+            const showBadge = item.href === "/portal/mis-reuniones" && pendingMeetings > 0 && !active;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="relative px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
+                style={active ? { background: "#FFF0F8", color: "#C8007A" } : { color: "#6B7280" }}
+              >
+                {item.label}
+                {showBadge && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {pendingMeetings}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-3 flex-shrink-0">
