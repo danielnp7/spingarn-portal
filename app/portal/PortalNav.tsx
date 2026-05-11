@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useState, useEffect, useRef } from "react";
+import { usePushSubscription } from "@/lib/hooks/usePushSubscription";
 
 const NAV = [
   { href: "/portal",               label: "Inicio" },
@@ -25,6 +26,8 @@ export default function PortalNav({
   const pathname = usePathname();
   const router   = useRouter();
   const bellRef  = useRef<HTMLButtonElement>(null);
+
+  const { permission, error: pushError, loading: pushLoading, requestAndSubscribe } = usePushSubscription(!!userId);
 
   // Per-nav badges
   const [badges, setBadges] = useState<Record<string, number>>({});
@@ -146,6 +149,21 @@ export default function PortalNav({
             )}
           </button>
 
+          {/* Push subscribe button (only when not granted/denied) */}
+          {permission !== "granted" && permission !== "denied" && (
+            <button
+              onClick={requestAndSubscribe}
+              disabled={pushLoading}
+              title={pushLoading ? "Activando..." : "Activar notificaciones"}
+              className="relative p-2 rounded-lg text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-50"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
+            </button>
+          )}
+
           <span className="text-sm text-gray-500 hidden sm:block">{userName}</span>
           <button
             onClick={handleSignOut}
@@ -155,6 +173,12 @@ export default function PortalNav({
           </button>
         </div>
       </div>
+      {/* Push error toast */}
+      {pushError && (
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-1.5 text-center">
+          <p className="text-xs text-amber-700">{pushError.includes("iPhone") || pushError.includes("pantalla") ? "En iPhone: Safari → Compartir → Agregar a pantalla de inicio, luego activa notificaciones" : pushError}</p>
+        </div>
+      )}
     </header>
   );
 }

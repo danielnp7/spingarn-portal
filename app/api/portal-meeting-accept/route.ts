@@ -83,5 +83,24 @@ export async function POST(req: NextRequest) {
     console.error("email error (non-fatal)", e);
   }
 
+  // Push notification to advisor (non-fatal)
+  try {
+    await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/push/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        userIds: [meeting.advisor_id],
+        title: `✅ ${meeting.client_name} confirmó horario`,
+        body: `${meeting.topic} — ${confirmed_date}`,
+        href: "/portal/mis-reuniones",
+      }),
+    });
+  } catch (e) {
+    console.error("push error (non-fatal)", e);
+  }
+
   return NextResponse.json({ ok: true });
 }
