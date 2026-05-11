@@ -136,8 +136,8 @@ export async function POST(req: NextRequest) {
 
   // Push notification to advisor in hub (best-effort)
   try {
-    const vapidPublic  = process.env.VAPID_PUBLIC_KEY;
-    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+    const vapidPublic  = (process.env.VAPID_PUBLIC_KEY  ?? "").replace(/\s/g, "");
+    const vapidPrivate = (process.env.VAPID_PRIVATE_KEY ?? "").replace(/\s/g, "");
     const fromEmail    = process.env.RESEND_FROM_EMAIL ?? "noreply@spingarn.ec";
 
     if (vapidPublic && vapidPrivate) {
