@@ -30,12 +30,22 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { advisor_id, advisor_name, advisor_email, topic, preferred_dates, duration_minutes, notes } = body;
 
-  if (!advisor_id || !advisor_email || !topic) {
+  if (!advisor_id || !topic) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
   }
 
-  // Insert meeting request using admin client (bypasses RLS for insert)
   const admin = adminClient();
+
+  // If email wasn't resolved client-side, look it up server-side
+  let resolvedEmail = advisor_email ?? "";
+  if (!resolvedEmail && advisor_id) {
+    try {
+      const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 });
+      resolvedEmail = authData?.users?.find((u: { id: string; email?: string }) => u.id === advisor_id)?.email ?? "";
+    } catch { /* best effort */ }
+  }
+
+  // Insert meeting request using admin client (bypasses RLS for insert)
   const { data: request, error: insertErr } = await admin
     .from("meeting_requests")
     .insert({
@@ -64,9 +74,9 @@ export async function POST(req: NextRequest) {
   const resend = new Resend(process.env.RESEND_API_KEY ?? "not_configured");
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "noreply@spingarn.ec";
 
-  await resend.emails.send({
+  if (resolvedEmail) await resend.emails.send({
     from: fromEmail,
-    to: advisor_email,
+    to: resolvedEmail,
     subject: `Solicitud de reunión — ${clientCompany}`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
