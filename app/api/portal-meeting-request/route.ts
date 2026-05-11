@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createAdmin } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
 
@@ -28,11 +27,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!.trim();
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!.trim();
-  const admin = createAdmin(supabaseUrl, serviceKey);
+  // Remove ALL whitespace (including embedded newlines from copy-paste)
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\s/g, "");
+  const serviceKey  = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").replace(/\s/g, "");
 
-  // Resolve advisor email via REST (avoids SDK header issues)
+  // Resolve advisor email via REST
   let resolvedEmail = (advisor_email ?? "").trim();
   if (!resolvedEmail && advisor_id) {
     try {
@@ -46,30 +45,38 @@ export async function POST(req: NextRequest) {
     } catch { /* best effort */ }
   }
 
-  // Insert meeting request using admin client (bypasses RLS for insert)
-  const { data: request, error: insertErr } = await admin
-    .from("meeting_requests")
-    .insert({
+  // Insert via REST — bypasses Supabase JS SDK to avoid header encoding issues
+  const insertRes = await fetch(`${supabaseUrl}/rest/v1/meeting_requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": serviceKey,
+      "Authorization": `Bearer ${serviceKey}`,
+      "Prefer": "return=representation",
+    },
+    body: JSON.stringify({
       client_id: profile.client_id,
       client_user_id: user.id,
       client_name: profile.name,
       client_company: clientCompany,
       advisor_id,
       advisor_name,
-      advisor_email,
+      advisor_email: resolvedEmail,
       topic,
       preferred_dates: preferred_dates ?? "",
       duration_minutes: duration_minutes ?? 60,
       notes: notes ?? "",
       status: "pendiente",
-    })
-    .select("id")
-    .single();
+    }),
+  });
 
-  if (insertErr) {
-    console.error("meeting_requests insert error", insertErr);
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
+  if (!insertRes.ok) {
+    const errBody = await insertRes.text();
+    console.error("meeting_requests insert error", errBody);
+    return NextResponse.json({ error: "Error al guardar la solicitud" }, { status: 500 });
   }
+
+  const [request] = await insertRes.json() as [{ id: string }];
 
   // Send email notification to advisor (best-effort — never blocks the response)
   try {
@@ -134,12 +141,13 @@ export async function POST(req: NextRequest) {
     const fromEmail    = process.env.RESEND_FROM_EMAIL ?? "noreply@spingarn.ec";
 
     if (vapidPublic && vapidPrivate) {
-      const { data: subs } = await admin
-        .from("push_subscriptions")
-        .select("endpoint, p256dh, auth")
-        .eq("user_id", advisor_id);
+      const subsRes = await fetch(
+        `${supabaseUrl}/rest/v1/push_subscriptions?user_id=eq.${advisor_id}&select=endpoint,p256dh,auth`,
+        { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
+      );
+      const subs = subsRes.ok ? await subsRes.json() : [];
 
-      if (subs && subs.length > 0) {
+      if (Array.isArray(subs) && subs.length > 0) {
         const webpush = await import("web-push");
         webpush.default.setVapidDetails(`mailto:${fromEmail}`, vapidPublic, vapidPrivate);
         const payload = JSON.stringify({
