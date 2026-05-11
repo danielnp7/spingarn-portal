@@ -3,12 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
-function adminClient() {
-  return createAdmin(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -34,14 +28,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
   }
 
-  const admin = adminClient();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!.trim();
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!.trim();
+  const admin = createAdmin(supabaseUrl, serviceKey);
 
-  // If email wasn't resolved client-side, look it up server-side
-  let resolvedEmail = advisor_email ?? "";
+  // Resolve advisor email via REST (avoids SDK header issues)
+  let resolvedEmail = (advisor_email ?? "").trim();
   if (!resolvedEmail && advisor_id) {
     try {
-      const { data: authData } = await admin.auth.admin.listUsers({ perPage: 1000 });
-      resolvedEmail = authData?.users?.find((u: { id: string; email?: string }) => u.id === advisor_id)?.email ?? "";
+      const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${advisor_id}`, {
+        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      });
+      if (res.ok) {
+        const userData = await res.json();
+        resolvedEmail = userData?.email ?? "";
+      }
     } catch { /* best effort */ }
   }
 
