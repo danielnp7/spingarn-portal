@@ -1,11 +1,104 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
+import Anthropic from "@anthropic-ai/sdk";
+
+export const maxDuration = 60;
 
 function adminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\s/g, "");
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").replace(/\s/g, "");
   return createAdmin(url, key);
+}
+
+const AREA_LABELS: Record<string, string> = {
+  aviacion:              "Aviación y Regulatorio",
+  contratacion_publica:  "Contratación Pública",
+  laboral:               "Laboral y Seguridad Social",
+  ma_energia:            "M&A y Energía",
+  propiedad_intelectual: "Propiedad Intelectual",
+  datos_personales:      "Protección de Datos Personales",
+  tax_finance:           "Tax and Finance",
+  tecnologia:            "Tecnología y Telecomunicaciones",
+};
+
+const URGENCY_MULT: Record<string, number> = { baja: 0.8, media: 1.0, alta: 1.5, critica: 2.0 };
+
+async function classifyConsultation(
+  admin: ReturnType<typeof adminClient>,
+  consultationId: string,
+  title: string,
+  area: string,
+  urgency: string,
+  description: string,
+) {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const prompt = `Eres un consultor senior de Spingarn, firma especializada en servicios legales, tributarios, financieros y estratégicos para empresas en Ecuador. Debes clasificar la siguiente consulta de un cliente.
+
+Título: ${title}
+Área: ${AREA_LABELS[area] ?? area}
+Urgencia declarada: ${urgency}
+Descripción: ${description}
+
+Clasifica esta consulta y devuelve ÚNICAMENTE un JSON válido con exactamente estos campos:
+
+{
+  "complexity": "simple" | "media" | "compleja" | "cotizacion_manual" | "requiere_reunion" | "requiere_socio_senior",
+  "area_responsible": string (área interna responsable),
+  "priority": "baja" | "normal" | "alta" | "urgente",
+  "estimated_hours": number (decimal, ej: 1.5),
+  "estimated_fee": number (USD, sin decimales),
+  "estimated_credits": number (entero),
+  "estimated_sla_hours": number (horas para respuesta),
+  "classification_note": string (explicación breve en español, 2-3 oraciones máximo)
+}
+
+Criterios de clasificación:
+- simple: consulta puntual estándar, respuesta directa → 1 crédito, USD 75, 24h
+- media: análisis moderado, revisión de documentos básicos → 3 créditos, USD 225, 48h
+- compleja: análisis profundo, múltiples áreas, criterio técnico avanzado → 5+ créditos, USD 375+, 72h
+- cotizacion_manual: requiere scope detallado y propuesta formal → presupuesto a definir
+- requiere_reunion: la consulta es ambigua o requiere contexto adicional → programar reunión
+- requiere_socio_senior: situación de alto riesgo, decisión estratégica, requiere socio → escalar
+
+No incluyas texto fuera del JSON. No uses markdown. Solo el objeto JSON.`;
+
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 512,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  let raw = msg.content[0].type === "text" ? msg.content[0].text.trim() : "";
+  raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  const c = JSON.parse(raw);
+
+  const required = ["complexity", "area_responsible", "priority", "estimated_hours",
+    "estimated_fee", "estimated_credits", "estimated_sla_hours", "classification_note"];
+  for (const f of required) {
+    if (c[f] === undefined) throw new Error(`Campo IA faltante: ${f}`);
+  }
+
+  const mult = URGENCY_MULT[urgency] ?? 1.0;
+  const needsManual = ["cotizacion_manual", "requiere_reunion", "requiere_socio_senior"].includes(c.complexity);
+  if (!needsManual) {
+    c.estimated_credits = Math.max(1, Math.ceil(c.estimated_credits * mult));
+    c.estimated_fee     = Math.round(c.estimated_fee * mult);
+  }
+
+  await admin.from("consultations").update({
+    status:               "classified",
+    complexity:           c.complexity,
+    area_responsible:     c.area_responsible,
+    priority:             c.priority,
+    estimated_hours:      c.estimated_hours,
+    estimated_fee:        c.estimated_fee,
+    estimated_credits:    c.estimated_credits,
+    estimated_sla_hours:  c.estimated_sla_hours,
+    classification_note:  c.classification_note,
+    updated_at:           new Date().toISOString(),
+  }).eq("id", consultationId);
 }
 
 // GET /api/consultations — list for logged-in client
@@ -28,7 +121,7 @@ export async function GET(_req: NextRequest) {
   return NextResponse.json(data ?? []);
 }
 
-// POST /api/consultations — create new consultation
+// POST /api/consultations — create and classify new consultation
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -48,28 +141,30 @@ export async function POST(req: NextRequest) {
   const { data, error } = await admin
     .from("consultations")
     .insert({
-      client_id: profile.client_id,
+      client_id:          profile.client_id,
       created_by_user_id: user.id,
-      title: title.trim(),
-      description: description.trim(),
+      title:              title.trim(),
+      description:        description.trim(),
       area,
-      urgency: urgency ?? "media",
-      status: "submitted",
+      urgency:            urgency ?? "media",
+      status:             "submitted",
     })
     .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Trigger classification and notification non-blocking
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
-  const cookie  = req.headers.get("cookie") ?? "";
+  // Run AI classification inline (synchronous — no URL dependency)
+  try {
+    await classifyConsultation(admin, data.id, data.title, data.area, data.urgency, data.description);
+  } catch {
+    // Classification failed silently — consultation stays at "submitted", hub can retrigger
+  }
 
-  fetch(`${baseUrl}/api/consultations/${data.id}/classify`, {
-    method: "POST",
-    headers: { "Cookie": cookie },
-  }).catch(() => {});
-
+  // Notify team (fire-and-forget — URL failure is non-critical)
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3001");
+  const cookie = req.headers.get("cookie") ?? "";
   fetch(`${baseUrl}/api/consultations/${data.id}/notify`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Cookie": cookie },

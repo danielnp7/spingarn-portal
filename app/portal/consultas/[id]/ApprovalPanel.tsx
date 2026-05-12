@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 const COMPLEXITY_LABELS: Record<string, { label: string; color: string; description: string }> = {
   simple:                { label: "Simple",            color: "#059669", description: "Consulta puntual de respuesta directa." },
@@ -129,9 +130,30 @@ export default function ApprovalPanel({
 
             {needsManualQuote && (
               <div className="pt-3 border-t border-gray-50">
-                <p className="text-sm text-gray-600">
-                  Esta consulta requiere una evaluación personalizada. El equipo Spingarn te contactará para definir el alcance y honorarios.
-                </p>
+                {complexity === "requiere_reunion" ? (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <span className="text-lg flex-shrink-0">📅</span>
+                      <div>
+                        <p className="text-sm font-semibold text-blue-800">Tu asesor solicita una reunión</p>
+                        <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
+                          Antes de definir el alcance y honorarios, el equipo necesita reunirse contigo para clarificar los detalles de esta consulta.
+                        </p>
+                      </div>
+                    </div>
+                    <Link
+                      href="/portal/reunion"
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold text-white transition-all"
+                      style={{ background: "#2563EB" }}
+                    >
+                      <span>📅</span> Agendar reunión con mi asesor
+                    </Link>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    Esta consulta requiere una evaluación personalizada. El equipo Spingarn te contactará para definir el alcance y honorarios.
+                  </p>
+                )}
               </div>
             )}
 
