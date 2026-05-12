@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import RequestTopupButton from "./RequestTopupButton";
 
 export const dynamic = "force-dynamic";
 
@@ -104,17 +105,16 @@ export default async function WalletPage() {
 
       {/* Recharge CTA */}
       {available < 3 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-4">
           <span className="text-2xl">⚠️</span>
           <div className="flex-1">
             <p className="text-sm font-semibold text-amber-800">Créditos bajos</p>
-            <p className="text-xs text-amber-700">Tienes {available} crédito{available !== 1 ? "s" : ""} disponibles. Contacta a tu asesor para recargar tu bolsa.</p>
+            <p className="text-xs text-amber-700">Tienes {available} crédito{available !== 1 ? "s" : ""} disponibles. Solicita una recarga para seguir usando los servicios Spingarn.</p>
           </div>
-          <Link href="/portal/reunion" className="flex-shrink-0 px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#C8007A" }}>
-            Contactar
-          </Link>
         </div>
       )}
+
+      <RequestTopupButton unitUsd={unitUsd} />
 
       {/* Transactions */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
