@@ -17,6 +17,7 @@ function fmt(n: number) {
 export default function RequestTopupButton({ unitUsd }: { unitUsd: number }) {
   const router = useRouter();
   const [open, setOpen]         = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [custom, setCustom]     = useState("");
   const [notes, setNotes]       = useState("");
@@ -63,13 +64,59 @@ export default function RequestTopupButton({ unitUsd }: { unitUsd: number }) {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
-        style={{ background: "#7C3AED" }}
-      >
-        💎 Solicitar recarga de créditos
-      </button>
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => setOpen(true)}
+          className="py-3 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+          style={{ background: "#7C3AED" }}
+        >
+          💎 Solicitar recarga
+        </button>
+        <button
+          onClick={() => setCardOpen(true)}
+          className="py-3 rounded-xl text-sm font-bold border-2 transition-all hover:bg-gray-50"
+          style={{ borderColor: "#C8007A", color: "#C8007A" }}
+        >
+          💳 Pagar con tarjeta
+        </button>
+      </div>
+
+      {cardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <p className="font-bold text-gray-900">Pagar con tarjeta</p>
+              <button onClick={() => setCardOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <div className="p-6 text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto" style={{ background: "#FFF0F8" }}>
+                <span className="text-3xl">💳</span>
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 text-base">Próximamente</p>
+                <p className="text-sm text-gray-500 mt-1 leading-relaxed">
+                  El pago con tarjeta de crédito estará disponible próximamente. Por ahora, usa la opción de solicitar recarga y el equipo Spingarn coordinará el pago contigo.
+                </p>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setCardOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all"
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={() => { setCardOpen(false); setOpen(true); }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-all"
+                  style={{ background: "#7C3AED" }}
+                >
+                  Solicitar recarga
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }}>
