@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import DeleteConsultationButton from "./DeleteConsultationButton";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,8 @@ export default async function ConsultasPage() {
   const pendingApproval = all.filter(c => c.status === "pending_client_approval");
   const active = all.filter(c => ["approved", "in_progress", "internal_review", "partner_review"].includes(c.status));
   const answered = all.filter(c => c.status === "answered");
-  const closed = all.filter(c => ["closed", "cancelled"].includes(c.status));
+  const closed = all.filter(c => c.status === "closed");
+  const cancelled = all.filter(c => c.status === "cancelled");
   const availableCredits = (wallet?.balance_credits ?? 0) - (wallet?.reserved_credits ?? 0);
 
   return (
@@ -151,9 +153,26 @@ export default async function ConsultasPage() {
       {/* Closed */}
       {closed.length > 0 && (
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Cerradas / Canceladas</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Cerradas</p>
           <div className="space-y-3">
             {closed.map(c => <ConsultationCard key={c.id} c={c} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Cancelled — with delete option */}
+      {cancelled.length > 0 && (
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-red-400 mb-3">Canceladas</p>
+          <div className="space-y-3">
+            {cancelled.map(c => (
+              <div key={c.id} className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <ConsultationCard c={c} />
+                </div>
+                <DeleteConsultationButton id={c.id} title={c.title} />
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -8,6 +8,36 @@ function adminClient() {
   return createAdmin(url, key);
 }
 
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: profile } = await supabase.from("profiles").select("client_id").eq("id", user.id).single();
+  if (!profile?.client_id) return NextResponse.json({ error: "No client linked" }, { status: 400 });
+
+  const admin = adminClient();
+
+  // Verify consultation belongs to client and is cancelled
+  const { data: consultation } = await admin
+    .from("consultations")
+    .select("id, status")
+    .eq("id", id)
+    .eq("client_id", profile.client_id)
+    .single();
+
+  if (!consultation) return NextResponse.json({ error: "No encontrada" }, { status: 404 });
+  if (consultation.status !== "cancelled") {
+    return NextResponse.json({ error: "Solo se pueden eliminar consultas canceladas" }, { status: 403 });
+  }
+
+  const { error } = await admin.from("consultations").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
