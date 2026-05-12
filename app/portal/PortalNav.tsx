@@ -8,11 +8,11 @@ import { usePushSubscription } from "@/lib/hooks/usePushSubscription";
 const NAV = [
   { href: "/portal",               label: "Inicio" },
   { href: "/portal/proyectos",     label: "Mis Proyectos" },
+  { href: "/portal/consultas",     label: "Mis Consultas" },
   { href: "/portal/facturas",      label: "Facturas" },
   { href: "/portal/mis-reuniones", label: "Mis Reuniones" },
   { href: "/portal/documentos",    label: "Documentos" },
   { href: "/portal/reunion",       label: "Agendar Reunión" },
-  { href: "/portal/solicitudes",   label: "Solicitar Servicio" },
   { href: "/portal/servicios",     label: "Nuestros Servicios" },
 ];
 
@@ -55,7 +55,25 @@ export default function PortalNav({
         setBadges(prev => ({ ...prev, "/portal/mis-reuniones": count ?? 0 }));
       });
 
-    // 2. Overdue invoices badge on Facturas
+    // 2. Consultas pendientes de aprobación
+    supabase
+      .from("profiles")
+      .select("client_id")
+      .eq("id", userId)
+      .single()
+      .then(({ data: prof }) => {
+        if (!prof?.client_id) return;
+        supabase
+          .from("consultations")
+          .select("id", { count: "exact", head: true })
+          .eq("client_id", prof.client_id)
+          .eq("status", "pending_client_approval")
+          .then(({ count }) => {
+            setBadges(prev => ({ ...prev, "/portal/consultas": count ?? 0 }));
+          });
+      });
+
+    // 3. Overdue invoices badge on Facturas
     // We need client_id — fetch profile first
     supabase
       .from("profiles")
@@ -74,7 +92,7 @@ export default function PortalNav({
           });
       });
 
-    // 3. Bell: responses (aceptada / rechazada / contrapropuesta) since last seen
+    // 4. Bell: responses (aceptada / rechazada / contrapropuesta) since last seen
     const lastSeen = localStorage.getItem(LS_MEETINGS_KEY) ?? "1970-01-01T00:00:00Z";
     supabase
       .from("meeting_requests")
@@ -93,46 +111,62 @@ export default function PortalNav({
 
   return (
     <header className="bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm">
-      <div className="max-w-5xl mx-auto px-4 flex items-center gap-6 h-16">
+      <div className="max-w-5xl mx-auto px-4 flex items-center gap-3 h-14">
 
         {/* Logo */}
-        <div className="flex-shrink-0 flex items-center gap-3">
+        <div className="flex-shrink-0 flex items-center gap-2">
           <div className="flex flex-col leading-none">
-            <span className="font-bold text-gray-900 text-lg tracking-tight">Spingarn</span>
-            <span className="text-[10px] font-medium tracking-widest uppercase mt-0.5" style={{ color: "#C8007A" }}>
-              Integrated Business Consulting
-            </span>
+            <span className="font-bold text-gray-900 text-base tracking-tight">Spingarn</span>
+            <span className="text-[9px] font-medium tracking-widest uppercase" style={{ color: "#C8007A" }}>Portal</span>
           </div>
           {clientName && (
-            <span className="text-xs text-gray-400 hidden sm:inline border-l border-gray-200 pl-3">/ {clientName}</span>
+            <span className="text-[11px] text-gray-400 hidden md:inline border-l border-gray-200 pl-2 truncate max-w-[180px]">/ {clientName}</span>
           )}
         </div>
 
-        {/* Nav items */}
-        <nav className="flex-1 flex items-center gap-1 overflow-x-auto">
-          {NAV.map(item => {
-            const active     = pathname === item.href;
-            const badgeCount = active ? 0 : (badges[item.href] ?? 0);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="relative px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
-                style={active ? { background: "#FFF0F8", color: "#C8007A" } : { color: "#6B7280" }}
-              >
-                {item.label}
-                {badgeCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1">
-                    {badgeCount}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* Nav items — scrollable with fade */}
+        <div className="flex-1 relative overflow-hidden">
+          <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-hide">
+            {NAV.map(item => {
+              const active     = pathname === item.href;
+              const badgeCount = active ? 0 : (badges[item.href] ?? 0);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="relative px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0"
+                  style={active ? { background: "#FFF0F8", color: "#C8007A" } : { color: "#6B7280" }}
+                >
+                  {item.label}
+                  {badgeCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center px-0.5">
+                      {badgeCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+          {/* Fade-out on right edge */}
+          <div className="absolute top-0 right-0 h-full w-6 pointer-events-none" style={{ background: "linear-gradient(to right, transparent, white)" }} />
+        </div>
 
-        {/* Right: bell + user + sign out */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Right: wallet + bell + user + sign out */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+
+          {/* Wallet / Credits — pill button, always visible */}
+          <button
+            onClick={() => router.push("/portal/wallet")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-xs font-bold transition-all hover:opacity-90 flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, #C8007A, #7D0049)" }}
+            title="Mis Créditos"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+            <span className="hidden sm:inline">Créditos</span>
+          </button>
+
           <button
             ref={bellRef}
             onClick={() => router.push("/portal/mis-reuniones")}

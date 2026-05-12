@@ -60,6 +60,7 @@ export default async function PortalHomePage() {
     { data: client },
     { data: projects },
     { data: invoices },
+    { data: pendingConsultations },
   ] = await Promise.all([
     supabase.from("clients").select("name, industry").eq("id", profile.client_id).single(),
     supabase
@@ -73,6 +74,13 @@ export default async function PortalHomePage() {
       .select("id, amount, status, due_date")
       .eq("client_id", profile.client_id)
       .not("status", "in", "(cobrada,cancelada)"),
+    supabase
+      .from("consultations")
+      .select("id, title, status, complexity, estimated_fee, created_at")
+      .eq("client_id", profile.client_id)
+      .in("status", ["pending_client_approval", "in_progress", "answered"])
+      .order("created_at", { ascending: false })
+      .limit(5),
   ]);
 
   // Fetch gestor names
@@ -250,20 +258,52 @@ export default async function PortalHomePage() {
             </div>
           )}
 
+          {/* Consultas pendientes */}
+          {(pendingConsultations ?? []).length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Consultas activas</p>
+                <Link href="/portal/consultas" className="text-xs hover:underline" style={{ color: "#C8007A" }}>Ver todas →</Link>
+              </div>
+              <div className="space-y-2">
+                {(pendingConsultations ?? []).map((c: { id: string; title: string; status: string; estimated_fee: number | null }) => (
+                  <Link key={c.id} href={`/portal/consultas/${c.id}`}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white border hover:shadow-sm transition-all"
+                    style={c.status === "pending_client_approval" ? { borderColor: "#FCD34D" } : { borderColor: "#F3F4F6" }}>
+                    <span className="text-sm flex-shrink-0">
+                      {c.status === "pending_client_approval" ? "⏳" : c.status === "answered" ? "✅" : "⚙️"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate">{c.title}</p>
+                      <p className="text-[10px] text-gray-400">
+                        {c.status === "pending_client_approval" ? "Requiere tu aprobación" : c.status === "answered" ? "Respondida" : "En progreso"}
+                      </p>
+                    </div>
+                    <span className="ml-auto text-gray-300 text-xs">→</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Quick access */}
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Acceso rápido</p>
             <div className="flex flex-col gap-2">
               {[
-                { href: "/portal/facturas",      icon: "🧾", label: "Mis Facturas",       sub: "Estado de pagos" },
-                { href: "/portal/mis-reuniones", icon: "📅", label: "Mis Reuniones",    sub: "Solicitudes agendadas" },
-                { href: "/portal/reunion",       icon: "🗓", label: "Agendar Reunión",  sub: "Hablar con tu asesor" },
-                { href: "/portal/documentos",  icon: "🔒", label: "Mis Documentos",     sub: "Archivos cifrados" },
-                { href: "/portal/solicitudes", icon: "📋", label: "Solicitar Servicio", sub: "Nuevo requerimiento" },
-                { href: "/portal/servicios",   icon: "💼", label: "Nuestros Servicios", sub: "Todo lo que hacemos" },
+                { href: "/portal/consultas/nueva", icon: "💬", label: "Nueva Consulta",     sub: "Envía una consulta profesional", highlight: true },
+                { href: "/portal/consultas",       icon: "📋", label: "Mis Consultas",      sub: "Historial y seguimiento" },
+                { href: "/portal/facturas",        icon: "🧾", label: "Mis Facturas",       sub: "Estado de pagos" },
+                { href: "/portal/mis-reuniones",   icon: "📅", label: "Mis Reuniones",      sub: "Solicitudes agendadas" },
+                { href: "/portal/reunion",         icon: "🗓", label: "Agendar Reunión",    sub: "Hablar con tu asesor" },
+                { href: "/portal/documentos",      icon: "🔒", label: "Mis Documentos",     sub: "Archivos cifrados" },
+                { href: "/portal/servicios",       icon: "💼", label: "Nuestros Servicios", sub: "Todo lo que hacemos" },
               ].map(item => (
                 <Link key={item.href} href={item.href}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white border border-gray-100 hover:border-pink-200 hover:shadow-sm transition-all">
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl border hover:shadow-sm transition-all"
+                  style={(item as { highlight?: boolean }).highlight
+                    ? { background: "#FFF0F8", borderColor: "#F9A8D4" }
+                    : { background: "white", borderColor: "#F3F4F6" }}>
                   <span className="text-lg flex-shrink-0">{item.icon}</span>
                   <div>
                     <p className="text-xs font-semibold text-gray-800">{item.label}</p>
