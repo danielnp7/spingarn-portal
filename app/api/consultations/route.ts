@@ -131,13 +131,27 @@ export async function POST(req: NextRequest) {
   if (!profile?.client_id) return NextResponse.json({ error: "No client linked" }, { status: 400 });
 
   const body = await req.json();
-  const { title, description, area, urgency } = body;
+  const { title, description, area, urgency, sub_area_id } = body;
 
   if (!title || !description || !area) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
   }
 
   const admin = adminClient();
+
+  // Auto-assign to advisor responsible for this sub-area
+  let assigned_to: string | null = null;
+  if (sub_area_id) {
+    const { data: advisor } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("sub_area_id", sub_area_id)
+      .in("role", ["partner", "partner2", "manager", "colaborador"])
+      .limit(1)
+      .maybeSingle();
+    assigned_to = advisor?.id ?? null;
+  }
+
   const { data, error } = await admin
     .from("consultations")
     .insert({
@@ -148,6 +162,8 @@ export async function POST(req: NextRequest) {
       area,
       urgency:            urgency ?? "media",
       status:             "submitted",
+      ...(sub_area_id ? { sub_area_id } : {}),
+      ...(assigned_to  ? { assigned_to } : {}),
     })
     .select()
     .single();

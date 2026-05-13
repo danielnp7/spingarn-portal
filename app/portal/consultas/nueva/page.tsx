@@ -2,16 +2,17 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-const AREAS = [
+const AREAS_BASE = [
   { value: "aviacion",              label: "Aviación y Regulatorio" },
   { value: "contratacion_publica",  label: "Contratación Pública" },
   { value: "laboral",               label: "Laboral y Seguridad Social" },
   { value: "ma_energia",            label: "M&A y Energía" },
   { value: "propiedad_intelectual", label: "Propiedad Intelectual" },
   { value: "datos_personales",      label: "Protección de Datos Personales" },
-  { value: "tax_finance",           label: "Tax and Finance" },
   { value: "tecnologia",            label: "Tecnología y Telecomunicaciones" },
 ];
+
+type SubArea = { id: string; name: string; area_slug: string };
 
 const URGENCIES = [
   { value: "baja",    label: "Baja",    sub: "sin plazo inmediato", multiplier: 0.8 },
@@ -48,6 +49,8 @@ export default function NuevaConsultaPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [area, setArea] = useState("");
+  const [subAreaId, setSubAreaId] = useState<string | null>(null);
+  const [taxSubAreas, setTaxSubAreas] = useState<SubArea[]>([]);
   const [urgency, setUrgency] = useState("media");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -58,6 +61,26 @@ export default function NuevaConsultaPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch("/api/sub-areas")
+      .then(r => r.ok ? r.json() : [])
+      .then((data: SubArea[]) => setTaxSubAreas(data.filter(s => s.area_slug === "tax_finance")))
+      .catch(() => {});
+  }, []);
+
+  function handleAreaChange(val: string) {
+    if (val.startsWith("tax_finance|")) {
+      const [, id] = val.split("|");
+      setArea("tax_finance");
+      setSubAreaId(id);
+    } else {
+      setArea(val);
+      setSubAreaId(null);
+    }
+  }
+
+  const areaSelectValue = area === "tax_finance" && subAreaId ? `tax_finance|${subAreaId}` : area;
 
   // Debounced AI preview — fires when form has enough data
   useEffect(() => {
@@ -93,7 +116,7 @@ export default function NuevaConsultaPage() {
       const res = await fetch("/api/consultations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), area, urgency, description: description.trim() }),
+        body: JSON.stringify({ title: title.trim(), area, urgency, description: description.trim(), sub_area_id: subAreaId ?? undefined }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Error al enviar");
       const data = await res.json();
@@ -139,10 +162,19 @@ export default function NuevaConsultaPage() {
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">
             Área <span className="text-red-500">*</span>
           </label>
-          <select value={area} onChange={e => setArea(e.target.value)}
+          <select value={areaSelectValue} onChange={e => handleAreaChange(e.target.value)}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-200" required>
             <option value="">Selecciona un área…</option>
-            {AREAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+            {AREAS_BASE.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+            {taxSubAreas.length > 0 ? (
+              <optgroup label="Tax and Finance">
+                {taxSubAreas.map(s => (
+                  <option key={s.id} value={`tax_finance|${s.id}`}>{s.name}</option>
+                ))}
+              </optgroup>
+            ) : (
+              <option value="tax_finance">Tax and Finance</option>
+            )}
           </select>
         </div>
 
