@@ -1,7 +1,21 @@
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2026-04-22.dahlia",
+let _stripe: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error("STRIPE_SECRET_KEY no está configurado en las variables de entorno.");
+    _stripe = new Stripe(key, { apiVersion: "2026-04-22.dahlia" });
+  }
+  return _stripe;
+}
+
+// Keep named export for backwards compat — resolved lazily
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    return (getStripe() as unknown as Record<string | symbol, unknown>)[prop];
+  },
 });
 
 export const CREDIT_UNIT_USD = 75; // 1 crédito = $75
