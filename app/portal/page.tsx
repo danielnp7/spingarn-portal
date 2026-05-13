@@ -173,20 +173,24 @@ export default async function PortalHomePage() {
           <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-white">
             <div className="grid sm:grid-cols-5">
               {/* Left — pitch */}
-              <div className="sm:col-span-3 p-6" style={{ background: "linear-gradient(135deg, #1A0010 0%, #4A0030 60%, #7D0049 100%)" }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-xl">🏛</span>
+              <div className="sm:col-span-3 p-6 relative overflow-hidden" style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E1035 50%, #4A0030 100%)" }}>
+                {/* Decorative circles — abstract, not legal */}
+                <div className="absolute top-0 right-0 w-40 h-40 rounded-full opacity-10" style={{ background: "radial-gradient(circle, #C8007A, transparent)", transform: "translate(30%, -30%)" }} />
+                <div className="absolute bottom-0 left-1/2 w-28 h-28 rounded-full opacity-8" style={{ background: "radial-gradient(circle, #7C3AED, transparent)", transform: "translate(-50%, 40%)" }} />
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm" style={{ background: "#C8007A" }}>✦</div>
                   <span className="text-xs font-bold tracking-widest uppercase text-pink-300">Consejo Consultivo Spingarn</span>
                 </div>
                 <h2 className="text-lg font-bold text-white mb-2 leading-snug">
-                  Tu panel de especialistas.<br />Respuestas institucionales, no opiniones.
+                  Opiniones expertas a la medida.<br />
+                  <span style={{ color: "#F9A8D4" }}>Legal, financiero y tributario — integrado.</span>
                 </h2>
-                <p className="text-sm text-pink-200 leading-relaxed mb-4">
-                  Derecho corporativo, tributación, finanzas, NIIF, aviación, contratación pública, propiedad intelectual y más — todos deliberando en paralelo sobre tu caso.
+                <p className="text-sm leading-relaxed mb-4" style={{ color: "#CBD5E1" }}>
+                  Especialistas en derecho, finanzas, NIIF, tributación, aviación y más deliberan sobre tu caso en paralelo y entregan una posición unificada de la firma.
                 </p>
                 <div className="flex flex-wrap gap-1.5 mb-5">
-                  {["⚖️ Laboral", "📊 Tributario", "💹 NIIF", "🏛️ Corporativo", "✈️ Aviación", "🏗️ Contratación Pública"].map(tag => (
-                    <span key={tag} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#ffffff18", color: "#FFD6EE" }}>{tag}</span>
+                  {["Laboral", "Tributario", "NIIF", "Corporativo", "Aviación", "Datos & Tech"].map(tag => (
+                    <span key={tag} className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: "#ffffff12", color: "#E2E8F0", border: "1px solid #ffffff20" }}>{tag}</span>
                   ))}
                 </div>
                 <Link
