@@ -177,7 +177,56 @@ export async function POST(req: NextRequest) {
     // Classification failed silently — consultation stays at "submitted", hub can retrigger
   }
 
-  // Notify team (fire-and-forget — URL failure is non-critical)
+  // Send push notification directly (no intermediate fetch — avoids fire-and-forget failures)
+  try {
+    const vapidPublic  = (process.env.VAPID_PUBLIC_KEY  ?? "").replace(/\s/g, "");
+    const vapidPrivate = (process.env.VAPID_PRIVATE_KEY ?? "").replace(/\s/g, "");
+    if (vapidPublic && vapidPrivate) {
+      // Notify assigned partner, or all admins/partners if unassigned
+      let notifyIds: string[] = [];
+      if (assigned_to) {
+        notifyIds = [assigned_to];
+      } else {
+        const { data: partners } = await admin
+          .from("profiles").select("id").in("role", ["admin", "partner2"]);
+        notifyIds = (partners ?? []).map((p: { id: string }) => p.id);
+      }
+
+      if (notifyIds.length > 0) {
+        const { data: subs } = await admin
+          .from("push_subscriptions")
+          .select("endpoint, p256dh, auth")
+          .in("user_id", notifyIds);
+
+        if (subs && subs.length > 0) {
+          const { data: clientRow } = await admin
+            .from("clients").select("name").eq("id", data.client_id).single();
+          const clientName = (clientRow as { name: string } | null)?.name ?? "Cliente";
+
+          const webpush = await import("web-push");
+          webpush.default.setVapidDetails(
+            `mailto:hub@spingarn.ec`, vapidPublic, vapidPrivate,
+          );
+          const payload = JSON.stringify({
+            title: `Nueva consulta — ${clientName}`,
+            body: data.title,
+            href: `/consultas/${data.id}`,
+            tag: `consulta-${data.id}`,
+          });
+          await Promise.allSettled(
+            subs.map((sub: { endpoint: string; p256dh: string; auth: string }) =>
+              webpush.default.sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                payload,
+              ).catch(() => admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint))
+            )
+          );
+        }
+      }
+    }
+  } catch { /* non-critical */ }
+
+  // Notify team by email (fire-and-forget)
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
     ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3001");
   const cookie = req.headers.get("cookie") ?? "";
