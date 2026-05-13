@@ -1,6 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+const CREDIT_COST = 1;
 
 type Session = { id: string; title: string; status: string; created_at: string };
 
@@ -12,17 +15,28 @@ export default function ConsejoPage() {
   const [error, setError] = useState("");
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [credits, setCredits] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/council/sessions")
       .then(r => r.json())
       .then(d => setSessions(Array.isArray(d) ? d : []))
       .finally(() => setLoadingSessions(false));
+
+    fetch("/api/wallet")
+      .then(r => r.json())
+      .then(d => {
+        const balance = (d?.balance_credits ?? 0) - (d?.reserved_credits ?? 0);
+        setCredits(balance);
+      })
+      .catch(() => setCredits(null));
   }, []);
+
+  const canAfford = credits === null || credits >= CREDIT_COST;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim() || description.trim().length < 50) return;
+    if (!title.trim() || description.trim().length < 50 || !canAfford) return;
     setLoading(true);
     setError("");
     try {
@@ -32,6 +46,11 @@ export default function ConsejoPage() {
         body: JSON.stringify({ title: title.trim(), description: description.trim() }),
       });
       const data = await res.json();
+      if (res.status === 402) {
+        setError(`Créditos insuficientes. Tienes ${data.available ?? 0} y esta sesión requiere ${data.needed}.`);
+        setLoading(false);
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? "Error");
       router.push(`/portal/consejo/${data.session_id}`);
     } catch (err) {
@@ -51,17 +70,44 @@ export default function ConsejoPage() {
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-10">
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Consejo Consultivo Spingarn</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Somete tu caso a nuestro panel de especialistas en derecho, finanzas, tributación y más.
-          Recibirás una posición institucional integrada.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            🏛 Consejo Consultivo Spingarn
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Panel de especialistas en derecho, finanzas, tributación, aviación y más — deliberando sobre tu caso en paralelo.
+          </p>
+        </div>
+        {credits !== null && (
+          <div className={`flex-shrink-0 text-center px-4 py-2 rounded-xl border ${credits >= CREDIT_COST ? "bg-green-50 border-green-100" : "bg-red-50 border-red-100"}`}>
+            <p className="text-2xl font-bold" style={{ color: credits >= CREDIT_COST ? "#16A34A" : "#DC2626" }}>{credits}</p>
+            <p className="text-xs text-gray-500">crédito{credits !== 1 ? "s" : ""}</p>
+          </div>
+        )}
       </div>
+
+      {/* No credits warning */}
+      {credits !== null && credits < CREDIT_COST && (
+        <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-red-700">Sin créditos disponibles</p>
+            <p className="text-xs text-red-500 mt-0.5">Cada sesión del consejo consume {CREDIT_COST} crédito. Recarga para continuar.</p>
+          </div>
+          <Link href="/portal/wallet" className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold text-white" style={{ background: "#C8007A" }}>
+            Recargar →
+          </Link>
+        </div>
+      )}
 
       {/* New case form */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">Nuevo caso</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-800">Nuevo caso</h2>
+          <span className="text-xs font-semibold px-3 py-1 rounded-full" style={{ background: "#FFF0F8", color: "#C8007A" }}>
+            {CREDIT_COST} crédito por sesión
+          </span>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">Título del caso</label>
@@ -89,7 +135,14 @@ export default function ConsejoPage() {
             <p className="text-xs text-gray-400 mt-1">{description.length} caracteres · mínimo 50</p>
           </div>
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3">
+              <p className="text-xs text-red-600">{error}</p>
+              {error.includes("Créditos") && (
+                <Link href="/portal/wallet" className="text-xs font-semibold underline mt-1 block" style={{ color: "#C8007A" }}>Recargar créditos →</Link>
+              )}
+            </div>
+          )}
 
           {loading && (
             <div className="rounded-xl border border-pink-100 bg-pink-50 p-4 text-sm text-pink-700 flex items-start gap-3">
@@ -99,20 +152,20 @@ export default function ConsejoPage() {
               </svg>
               <div>
                 <p className="font-semibold">El consejo está deliberando…</p>
-                <p className="text-pink-600 mt-0.5">Los especialistas están analizando tu caso en paralelo. Esto toma entre 30 y 90 segundos.</p>
+                <p className="text-pink-600 mt-0.5">Los especialistas analizan tu caso en paralelo. Esto toma entre 30 y 90 segundos.</p>
               </div>
             </div>
           )}
 
           <button
             type="submit"
-            disabled={loading || description.trim().length < 50 || !title.trim()}
+            disabled={loading || description.trim().length < 50 || !title.trim() || !canAfford}
             className="w-full py-3 text-white rounded-xl text-sm font-semibold transition disabled:opacity-40"
             style={{ background: "#C8007A" }}
             onMouseEnter={e => { if (!loading) e.currentTarget.style.background = "#A3005F"; }}
             onMouseLeave={e => { if (!loading) e.currentTarget.style.background = "#C8007A"; }}
           >
-            {loading ? "Deliberando…" : "Someter al Consejo"}
+            {loading ? "Deliberando…" : !canAfford ? "Sin créditos — recarga para continuar" : `Someter al Consejo · ${CREDIT_COST} crédito`}
           </button>
         </form>
       </div>

@@ -6,6 +6,8 @@ import { runCouncil } from "@/lib/council/orchestrator";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
+export const COUNCIL_CREDIT_COST = 1; // 1 crédito = $75 por sesión del consejo
+
 function adminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\s/g, "");
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").replace(/\s/g, "");
@@ -27,6 +29,23 @@ export async function POST(req: NextRequest) {
 
   const admin = adminClient();
 
+  // Check wallet balance before running
+  const { data: wallet } = await admin
+    .from("client_wallet")
+    .select("balance_credits, reserved_credits")
+    .eq("client_id", profile.client_id)
+    .maybeSingle();
+
+  const available = (wallet?.balance_credits ?? 0) - (wallet?.reserved_credits ?? 0);
+  if (available < COUNCIL_CREDIT_COST) {
+    return NextResponse.json({
+      error: "Créditos insuficientes",
+      available,
+      needed: COUNCIL_CREDIT_COST,
+      shortfall: COUNCIL_CREDIT_COST - available,
+    }, { status: 402 });
+  }
+
   // Create session as processing
   const { data: session, error: sessionError } = await admin.from("council_sessions").insert({
     client_id: profile.client_id,
@@ -42,6 +61,22 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await runCouncil(title.trim(), description.trim());
+
+    // Deduct credits — debit immediately since service is delivered instantly
+    const current = wallet?.balance_credits ?? 0;
+    await admin.from("client_wallet").upsert({
+      client_id: profile.client_id,
+      balance_credits: current - COUNCIL_CREDIT_COST,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "client_id" });
+
+    await admin.from("wallet_transactions").insert({
+      client_id: profile.client_id,
+      type: "debit",
+      credits: COUNCIL_CREDIT_COST,
+      amount_usd: 75 * COUNCIL_CREDIT_COST,
+      description: `Consejo Consultivo: ${title.trim()}`,
+    });
 
     // Save individual agent responses
     await admin.from("council_agent_responses").insert(

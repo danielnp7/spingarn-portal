@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { COUNCIL_CREDIT_COST } from "@/app/api/council/ask/route";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,8 @@ export default async function PortalHomePage() {
     { data: projects },
     { data: invoices },
     { data: pendingConsultations },
+    { data: wallet },
+    { data: recentCouncilSessions },
   ] = await Promise.all([
     supabase.from("clients").select("name, industry").eq("id", profile.client_id).single(),
     supabase
@@ -81,6 +84,17 @@ export default async function PortalHomePage() {
       .in("status", ["pending_client_approval", "in_progress", "answered"])
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("client_wallet")
+      .select("balance_credits, reserved_credits")
+      .eq("client_id", profile.client_id)
+      .maybeSingle(),
+    supabase
+      .from("council_sessions")
+      .select("id, title, status, created_at")
+      .eq("client_id", profile.client_id)
+      .order("created_at", { ascending: false })
+      .limit(3),
   ]);
 
   // Fetch gestor names
@@ -150,6 +164,78 @@ export default async function PortalHomePage() {
         />
         <StatCard label="En ejecución" value={(projects ?? []).filter(p => p.status === "en_ejecucion").length} icon="⚙" accent="#2563EB" />
       </div>
+
+      {/* Consejo Consultivo — hero */}
+      {(() => {
+        const credits = (wallet?.balance_credits ?? 0) - (wallet?.reserved_credits ?? 0);
+        const canAfford = credits >= COUNCIL_CREDIT_COST;
+        return (
+          <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-white">
+            <div className="grid sm:grid-cols-5">
+              {/* Left — pitch */}
+              <div className="sm:col-span-3 p-6" style={{ background: "linear-gradient(135deg, #1A0010 0%, #4A0030 60%, #7D0049 100%)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xl">🏛</span>
+                  <span className="text-xs font-bold tracking-widest uppercase text-pink-300">Consejo Consultivo Spingarn</span>
+                </div>
+                <h2 className="text-lg font-bold text-white mb-2 leading-snug">
+                  Tu panel de especialistas.<br />Respuestas institucionales, no opiniones.
+                </h2>
+                <p className="text-sm text-pink-200 leading-relaxed mb-4">
+                  Derecho corporativo, tributación, finanzas, NIIF, aviación, contratación pública, propiedad intelectual y más — todos deliberando en paralelo sobre tu caso.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mb-5">
+                  {["⚖️ Laboral", "📊 Tributario", "💹 NIIF", "🏛️ Corporativo", "✈️ Aviación", "🏗️ Contratación Pública"].map(tag => (
+                    <span key={tag} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#ffffff18", color: "#FFD6EE" }}>{tag}</span>
+                  ))}
+                </div>
+                <Link
+                  href="/portal/consejo"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition"
+                  style={{ background: "#C8007A", color: "white" }}
+                >
+                  Someter un caso al Consejo
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                </Link>
+              </div>
+
+              {/* Right — credits + recent */}
+              <div className="sm:col-span-2 p-5 flex flex-col justify-between gap-4 bg-white">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1">Costo por sesión</p>
+                  <div className="flex items-end gap-2">
+                    <span className="text-3xl font-bold" style={{ color: "#C8007A" }}>{COUNCIL_CREDIT_COST}</span>
+                    <span className="text-sm text-gray-500 mb-1">crédito{COUNCIL_CREDIT_COST !== 1 ? "s" : ""}</span>
+                  </div>
+                  <div className={`mt-2 text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 ${canAfford ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${canAfford ? "bg-green-500" : "bg-red-500"}`} />
+                    {canAfford ? `${credits} crédito${credits !== 1 ? "s" : ""} disponible${credits !== 1 ? "s" : ""}` : "Sin créditos — recarga para continuar"}
+                  </div>
+                  {!canAfford && (
+                    <Link href="/portal/wallet" className="mt-2 text-xs font-semibold underline block" style={{ color: "#C8007A" }}>Recargar créditos →</Link>
+                  )}
+                </div>
+
+                {(recentCouncilSessions ?? []).length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Casos recientes</p>
+                    <div className="space-y-1.5">
+                      {(recentCouncilSessions ?? []).slice(0, 3).map((s: { id: string; title: string; status: string; created_at: string }) => (
+                        <Link key={s.id} href={`/portal/consejo/${s.id}`}
+                          className="flex items-center gap-2 text-xs text-gray-600 hover:text-pink-700 transition truncate group">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.status === "completed" ? "bg-green-400" : s.status === "processing" ? "bg-amber-400 animate-pulse" : "bg-gray-300"}`} />
+                          <span className="truncate group-hover:underline">{s.title}</span>
+                        </Link>
+                      ))}
+                    </div>
+                    <Link href="/portal/consejo" className="text-xs mt-2 block hover:underline" style={{ color: "#C8007A" }}>Ver todos →</Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Main content — two columns on desktop */}
       <div className="grid lg:grid-cols-3 gap-5">
