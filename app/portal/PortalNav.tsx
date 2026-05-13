@@ -15,6 +15,7 @@ const NAV = [
   { href: "/portal/reunion",       label: "Agendar Reunión" },
   { href: "/portal/servicios",     label: "Nuestros Servicios" },
   { href: "/portal/planes",        label: "✨ Planes" },
+  { href: "/portal/consejo",       label: "🏛 Consejo" },
 ];
 
 const LS_MEETINGS_KEY = "portal_meetings_last_seen";
