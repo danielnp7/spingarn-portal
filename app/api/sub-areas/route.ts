@@ -29,10 +29,13 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json(
-    (data ?? []).map((s: { id: string; name: string; area: { name: string } | null }) => ({
-      id: s.id,
-      name: s.name,
-      area_slug: AREA_NAME_TO_SLUG[s.area?.name ?? ""] ?? "tax_finance",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (data ?? []).map((s: any) => ({
+      id: s.id as string,
+      name: s.name as string,
+      area_slug: AREA_NAME_TO_SLUG[
+        (Array.isArray(s.area) ? s.area[0]?.name : s.area?.name) ?? ""
+      ] ?? "tax_finance",
     }))
   );
 }
