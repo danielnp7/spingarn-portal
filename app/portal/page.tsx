@@ -189,7 +189,7 @@ export default async function PortalHomePage() {
                   Especialistas en derecho, finanzas, NIIF, tributación, aviación y más deliberan sobre tu caso en paralelo y entregan una posición unificada de la firma.
                 </p>
                 <div className="flex flex-wrap gap-1.5 mb-5">
-                  {["Laboral", "Tributario", "NIIF", "Corporativo", "Aviación", "Datos & Tech"].map(tag => (
+                  {["Aviación y Regulatorio", "Contratación Pública", "Laboral", "M&A y Energía", "Propiedad Intelectual", "Datos Personales", "Tecnología", "Tax & Finance"].map(tag => (
                     <span key={tag} className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: "#ffffff12", color: "#E2E8F0", border: "1px solid #ffffff20" }}>{tag}</span>
                   ))}
                 </div>
