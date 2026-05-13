@@ -43,8 +43,53 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const statusLabel = STATUS_LABELS[status] ?? `Estado actualizado: ${status}`;
   const clientName  = (consultation.client as { name: string } | null)?.name ?? "Cliente";
 
-  // Notify Spingarn team on new/approved consultation
+  // Push notification to assigned partner (or all admins if unassigned)
   if (status === "submitted" || status === "approved" || toTeam) {
+    try {
+      const vapidPublic  = (process.env.VAPID_PUBLIC_KEY  ?? "").replace(/\s/g, "");
+      const vapidPrivate = (process.env.VAPID_PRIVATE_KEY ?? "").replace(/\s/g, "");
+      if (vapidPublic && vapidPrivate) {
+        // Find hub users to notify: assigned partner first, fallback to all admins
+        let notifyIds: string[] = [];
+        if (consultation.assigned_to) {
+          notifyIds = [consultation.assigned_to];
+        } else {
+          const { data: admins } = await admin
+            .from("profiles").select("id").in("role", ["admin", "partner2"]);
+          notifyIds = (admins ?? []).map((p: { id: string }) => p.id);
+        }
+
+        if (notifyIds.length > 0) {
+          const { data: subs } = await admin
+            .from("push_subscriptions")
+            .select("endpoint, p256dh, auth")
+            .in("user_id", notifyIds);
+
+          if (subs && subs.length > 0) {
+            const webpush = await import("web-push");
+            webpush.default.setVapidDetails(
+              `mailto:${process.env.RESEND_FROM_EMAIL ?? "hub@spingarn.ec"}`,
+              vapidPublic, vapidPrivate
+            );
+            const payload = JSON.stringify({
+              title: `Nueva consulta — ${clientName}`,
+              body: consultation.title,
+              href: `/consultas/${id}`,
+              tag: `consulta-${id}`,
+            });
+            await Promise.allSettled(
+              subs.map((sub: { endpoint: string; p256dh: string; auth: string }) =>
+                webpush.default.sendNotification(
+                  { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                  payload
+                ).catch(() => admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint))
+              )
+            );
+          }
+        }
+      }
+    } catch { /* non-critical */ }
+
     const teamEmail = process.env.LEAD_RECIPIENT ?? "dnarvaez@spingarn.ec";
     await resend.emails.send({
       from,

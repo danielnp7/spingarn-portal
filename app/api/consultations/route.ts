@@ -139,14 +139,14 @@ export async function POST(req: NextRequest) {
 
   const admin = adminClient();
 
-  // Auto-assign to advisor responsible for this sub-area
+  // Auto-assign to the partner responsible for this sub-area (never managers or staff)
   let assigned_to: string | null = null;
   if (sub_area_id) {
     const { data: advisor } = await admin
       .from("profiles")
       .select("id")
       .eq("sub_area_id", sub_area_id)
-      .in("role", ["partner", "partner2", "manager", "colaborador"])
+      .in("role", ["admin", "partner2"])
       .limit(1)
       .maybeSingle();
     assigned_to = advisor?.id ?? null;
