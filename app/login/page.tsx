@@ -135,7 +135,11 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        <p className="text-center text-sm text-gray-400 mt-4">
+          ¿No tienes cuenta?{" "}
+          <a href="/signup" className="font-semibold hover:underline" style={{ color: "#C8007A" }}>Créala gratis</a>
+        </p>
+        <p className="text-center text-xs text-gray-400 mt-2">
           ¿Necesitas ayuda? Escríbenos a{" "}
           <a href="mailto:hub@spingarn.ec" className="hover:underline" style={{ color: "#C8007A" }}>hub@spingarn.ec</a>
         </p>

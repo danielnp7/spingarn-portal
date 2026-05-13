@@ -30,8 +30,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Public routes
-  if (pathname.startsWith("/login") || pathname.startsWith("/auth")) {
-    if (user) return NextResponse.redirect(new URL("/portal", request.url));
+  if (pathname.startsWith("/login") || pathname.startsWith("/auth") || pathname.startsWith("/signup")) {
+    if (user && !pathname.startsWith("/auth")) return NextResponse.redirect(new URL("/portal", request.url));
     return supabaseResponse;
   }
 
