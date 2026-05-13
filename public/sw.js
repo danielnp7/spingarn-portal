@@ -6,16 +6,19 @@ self.addEventListener("push", (event) => {
       body: data.body,
       icon: "/logo.png",
       badge: "/logo.png",
-      data: { href: data.href ?? "/" },
+      data: { href: data.href ?? "/portal" },
       tag: data.tag ?? "spingarn-portal",
       renotify: true,
+      requireInteraction: true,
+      vibrate: [200, 100, 200, 100, 200],
+      silent: false,
     })
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const href = event.notification.data?.href ?? "/";
+  const href = event.notification.data?.href ?? "/portal";
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const client of list) {
