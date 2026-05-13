@@ -4,8 +4,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      icon: "/logo.png",
+      badge: "/logo.png",
       data: { href: data.href ?? "/" },
       tag: data.tag ?? "spingarn-portal",
       renotify: true,

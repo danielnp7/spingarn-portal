@@ -1,0 +1,21 @@
+{
+  "name": "Spingarn Portal",
+  "short_name": "Spingarn",
+  "description": "Portal del cliente — Spingarn Integrated Business Consulting",
+  "start_url": "/portal",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#C8007A",
+  "orientation": "any",
+  "lang": "es-EC",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"]
+}
