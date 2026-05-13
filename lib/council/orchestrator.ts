@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClient as createAdmin } from "@supabase/supabase-js";
 import { COUNCIL_AGENTS, ORCHESTRATOR_SYSTEM_PROMPT, selectRelevantAgents, type CouncilAgent } from "./agents";
 
 const MODEL = "claude-sonnet-4-6";
@@ -18,11 +19,76 @@ function getClient(): Anthropic {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 }
 
-async function runAgent(client: Anthropic, agent: CouncilAgent, caseTitle: string, caseDescription: string): Promise<AgentResult> {
+function adminClient() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\s/g, "");
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").replace(/\s/g, "");
+  return createAdmin(url, key);
+}
+
+type KnowledgeEntry = { type: string; title: string; content: string; source: string | null; effective_date: string | null };
+
+async function fetchKnowledge(agentId: string): Promise<KnowledgeEntry[]> {
+  try {
+    const admin = adminClient();
+    const { data } = await admin
+      .from("agent_knowledge")
+      .select("type, title, content, source, effective_date")
+      .eq("agent_id", agentId)
+      .eq("is_active", true)
+      .order("type")
+      .order("created_at", { ascending: false });
+    return (data ?? []) as KnowledgeEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function buildKnowledgeBlock(entries: KnowledgeEntry[]): string {
+  if (entries.length === 0) return "";
+
+  const typeLabels: Record<string, string> = {
+    norma_vigente:  "NORMAS VIGENTES",
+    jurisprudencia: "JURISPRUDENCIA Y PRECEDENTES",
+    caso_tipo:      "CASOS TIPO",
+    criterio:       "CRITERIOS SPINGARN",
+    alerta_cambio:  "⚠ ALERTAS DE CAMBIO NORMATIVO RECIENTE",
+    otro:           "INFORMACIÓN ADICIONAL",
+  };
+
+  const grouped: Record<string, KnowledgeEntry[]> = {};
+  for (const e of entries) {
+    if (!grouped[e.type]) grouped[e.type] = [];
+    grouped[e.type].push(e);
+  }
+
+  const sections = Object.entries(grouped).map(([type, items]) => {
+    const header = typeLabels[type] ?? type.toUpperCase();
+    const body = items.map(e => {
+      let text = `• ${e.title}\n${e.content}`;
+      if (e.source) text += `\n  Fuente: ${e.source}`;
+      if (e.effective_date) text += ` · Vigente desde: ${e.effective_date}`;
+      return text;
+    }).join("\n\n");
+    return `=== ${header} ===\n${body}`;
+  });
+
+  return `\n\n---\nCONOCIMIENTO ESPECIALIZADO DE SPINGARN PARA ESTE AGENTE\n(Información validada por los socios de la firma — tiene precedencia sobre tu conocimiento base cuando haya conflicto)\n\n${sections.join("\n\n")}\n---`;
+}
+
+async function runAgent(
+  client: Anthropic,
+  agent: CouncilAgent,
+  caseTitle: string,
+  caseDescription: string,
+  knowledge: KnowledgeEntry[]
+): Promise<AgentResult> {
+  const knowledgeBlock = buildKnowledgeBlock(knowledge);
+  const systemPrompt = agent.systemPrompt + knowledgeBlock;
+
   const message = await client.messages.create({
     model: MODEL,
     max_tokens: 1500,
-    system: agent.systemPrompt,
+    system: systemPrompt,
     messages: [
       {
         role: "user",
@@ -66,12 +132,14 @@ export async function runCouncil(caseTitle: string, caseDescription: string): Pr
   const client = getClient();
   const selectedAgents = selectRelevantAgents(caseDescription);
 
-  // Run all relevant agents in parallel
+  // Fetch knowledge for all selected agents in parallel, then run agents with their knowledge
   const agentResults = await Promise.all(
-    selectedAgents.map(agent => runAgent(client, agent, caseTitle, caseDescription))
+    selectedAgents.map(async agent => {
+      const knowledge = await fetchKnowledge(agent.id);
+      return runAgent(client, agent, caseTitle, caseDescription, knowledge);
+    })
   );
 
-  // Synthesize into unified council response
   const councilResponse = await synthesize(client, caseTitle, agentResults);
 
   return { agentResults, councilResponse, selectedAgents };
