@@ -254,6 +254,29 @@ export default async function ConsultaDetailPage({ params }: { params: Promise<{
         </div>
       )}
 
+      {/* Attachments uploaded with consultation */}
+      {Array.isArray(consultation.attachments) && consultation.attachments.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Archivos adjuntos</p>
+          <div className="space-y-2">
+            {(consultation.attachments as { name: string; url: string; size: number; type: string }[]).map((f, i) => {
+              const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+              const icon = ext === "pdf" ? "📄" : ["doc","docx"].includes(ext) ? "📝" : ["xls","xlsx"].includes(ext) ? "📊" : ["jpg","jpeg","png","webp"].includes(ext) ? "🖼" : "📎";
+              const sizeStr = f.size < 1048576 ? `${(f.size / 1024).toFixed(1)} KB` : `${(f.size / 1048576).toFixed(1)} MB`;
+              return (
+                <div key={i} className="flex items-center gap-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm">
+                  <span className="text-base flex-shrink-0">{icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate font-medium text-gray-700">{f.name}</p>
+                    <p className="text-xs text-gray-400">{sizeStr}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Internal messaging */}
       <ConsultaMessages consultationId={id} />
 

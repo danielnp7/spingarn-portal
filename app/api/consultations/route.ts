@@ -121,6 +121,8 @@ export async function GET(_req: NextRequest) {
   return NextResponse.json(data ?? []);
 }
 
+const BUCKET = "client-files";
+
 // POST /api/consultations — create and classify new consultation
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -130,8 +132,27 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await supabase.from("profiles").select("client_id").eq("id", user.id).single();
   if (!profile?.client_id) return NextResponse.json({ error: "No client linked" }, { status: 400 });
 
-  const body = await req.json();
-  const { title, description, area, urgency, sub_area_id } = body;
+  // Accept both FormData (with files) and JSON
+  let title: string, description: string, area: string, urgency: string, sub_area_id: string | undefined;
+  let fileEntries: File[] = [];
+
+  const ct = req.headers.get("content-type") ?? "";
+  if (ct.includes("multipart/form-data") || ct.includes("application/x-www-form-urlencoded")) {
+    const fd = await req.formData();
+    title       = (fd.get("title") as string | null)?.trim() ?? "";
+    description = (fd.get("description") as string | null)?.trim() ?? "";
+    area        = (fd.get("area") as string | null) ?? "";
+    urgency     = (fd.get("urgency") as string | null) ?? "media";
+    sub_area_id = (fd.get("sub_area_id") as string | null) ?? undefined;
+    fileEntries = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  } else {
+    const body  = await req.json();
+    title       = body.title?.trim() ?? "";
+    description = body.description?.trim() ?? "";
+    area        = body.area ?? "";
+    urgency     = body.urgency ?? "media";
+    sub_area_id = body.sub_area_id;
+  }
 
   if (!title || !description || !area) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 });
@@ -169,6 +190,24 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Upload attachments and store metadata on the consultation
+  if (fileEntries.length > 0) {
+    const uploaded: { name: string; url: string; size: number; type: string }[] = [];
+    for (const file of fileEntries) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `${profile.client_id}/consultas/${data.id}/adjuntos/${Date.now()}_${safeName}`;
+      const { error: upErr } = await admin.storage.from(BUCKET).upload(
+        path, Buffer.from(await file.arrayBuffer()),
+        { contentType: file.type || "application/octet-stream", upsert: false }
+      );
+      if (!upErr) uploaded.push({ name: file.name, url: path, size: file.size, type: file.type });
+    }
+    if (uploaded.length > 0) {
+      await admin.from("consultations").update({ attachments: uploaded }).eq("id", data.id);
+      data.attachments = uploaded;
+    }
+  }
 
   // Run AI classification inline (synchronous — no URL dependency)
   try {

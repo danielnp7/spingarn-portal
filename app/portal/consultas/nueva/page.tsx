@@ -113,11 +113,15 @@ export default function NuevaConsultaPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/consultations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), area, urgency, description: description.trim(), sub_area_id: subAreaId ?? undefined }),
-      });
+      const fd = new FormData();
+      fd.append("title", title.trim());
+      fd.append("area", area);
+      fd.append("urgency", urgency);
+      fd.append("description", description.trim());
+      if (subAreaId) fd.append("sub_area_id", subAreaId);
+      for (const f of files) fd.append("files", f);
+
+      const res = await fetch("/api/consultations", { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).error ?? "Error al enviar");
       const data = await res.json();
       router.push(`/portal/consultas/${data.id}?nuevo=1`);
