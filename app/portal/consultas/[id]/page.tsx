@@ -3,6 +3,7 @@ import { createClient as createAdmin } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ApprovalPanel from "./ApprovalPanel";
+import ConsultaMessages from "./ConsultaMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -252,6 +253,9 @@ export default async function ConsultaDetailPage({ params }: { params: Promise<{
           )}
         </div>
       )}
+
+      {/* Internal messaging */}
+      <ConsultaMessages consultationId={id} />
 
       {/* Approval history */}
       {(approvals ?? []).length > 0 && (
