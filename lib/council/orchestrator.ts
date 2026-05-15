@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { COUNCIL_AGENTS, ORCHESTRATOR_SYSTEM_PROMPT, selectRelevantAgents, type CouncilAgent } from "./agents";
+import { buildAgentLegalBlock } from "@/lib/legal/ecuador-search";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -80,10 +81,11 @@ async function runAgent(
   agent: CouncilAgent,
   caseTitle: string,
   caseDescription: string,
-  knowledge: KnowledgeEntry[]
+  knowledge: KnowledgeEntry[],
+  legalBlock: string,
 ): Promise<AgentResult> {
   const knowledgeBlock = buildKnowledgeBlock(knowledge);
-  const systemPrompt = agent.systemPrompt + knowledgeBlock;
+  const systemPrompt = agent.systemPrompt + knowledgeBlock + legalBlock;
 
   const message = await client.messages.create({
     model: MODEL,
@@ -132,11 +134,14 @@ export async function runCouncil(caseTitle: string, caseDescription: string): Pr
   const client = getClient();
   const selectedAgents = selectRelevantAgents(caseDescription);
 
-  // Fetch knowledge for all selected agents in parallel, then run agents with their knowledge
+  // Fetch knowledge + legal context for all agents in parallel, then run agents
   const agentResults = await Promise.all(
     selectedAgents.map(async agent => {
-      const knowledge = await fetchKnowledge(agent.id);
-      return runAgent(client, agent, caseTitle, caseDescription, knowledge);
+      const [knowledge, legalBlock] = await Promise.all([
+        fetchKnowledge(agent.id),
+        buildAgentLegalBlock(agent.id, caseDescription, client).catch(() => ""),
+      ]);
+      return runAgent(client, agent, caseTitle, caseDescription, knowledge, legalBlock);
     })
   );
 
