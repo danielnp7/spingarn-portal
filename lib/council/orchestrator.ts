@@ -85,7 +85,8 @@ async function runAgent(
   legalBlock: string,
 ): Promise<AgentResult> {
   const knowledgeBlock = buildKnowledgeBlock(knowledge);
-  const systemPrompt = agent.systemPrompt + knowledgeBlock + legalBlock;
+  const hierarchyNote = `\n\nJERARQUÍA DE FUENTES (respeta este orden):\n1. CONOCIMIENTO SPINGARN (sección anterior) — máxima prioridad, no contradecir\n2. INFORMACIÓN EN TIEMPO REAL (sección siguiente, obtenida hoy) — usar para cifras y resoluciones vigentes\n3. Tu conocimiento de entrenamiento — solo para marcos normativos estables; si hay conflicto con 1 o 2, prevalecen éstas\nSi no tienes certeza de un dato, indícalo explícitamente en lugar de inventar.`;
+  const systemPrompt = agent.systemPrompt + knowledgeBlock + hierarchyNote + legalBlock;
 
   const message = await client.messages.create({
     model: MODEL,
@@ -139,7 +140,7 @@ export async function runCouncil(caseTitle: string, caseDescription: string): Pr
     selectedAgents.map(async agent => {
       const [knowledge, legalBlock] = await Promise.all([
         fetchKnowledge(agent.id),
-        buildAgentLegalBlock(agent.id, caseDescription, client).catch(() => ""),
+        buildAgentLegalBlock(agent.id, caseDescription).catch(() => ""),
       ]);
       return runAgent(client, agent, caseTitle, caseDescription, knowledge, legalBlock);
     })

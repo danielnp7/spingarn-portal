@@ -1,70 +1,126 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { tavily } from "@tavily/core";
 
-const AGENT_FETCH_SOURCES: Record<string, { url: string; label: string }[]> = {
-  laboral:              [{ url: "https://www.trabajo.gob.ec/normativa-legal/", label: "Normativa Ministerio del Trabajo" }],
-  corporativo:          [{ url: "https://www.supercias.gob.ec/portalscvs/", label: "Superintendencia de Compañías (SCVS)" }],
-  tributario:           [{ url: "https://www.sri.gob.ec/normativa-vigente", label: "Normativa SRI vigente" }],
-  financiero:           [{ url: "https://www.bce.fin.ec/tasas-de-interes/", label: "Tasas de interés BCE" }],
-  aviacion:             [{ url: "https://www.aviacion.gob.ec/regulaciones-aeronauticas-del-ecuador-rae/", label: "Regulaciones DGAC" }],
-  contratacion_publica: [{ url: "https://www.sercop.gob.ec/normativa/", label: "Normativa SERCOP" }],
-  propiedad_intelectual:[{ url: "https://www.senadi.gob.ec/normativa/", label: "Normativa SENADI" }],
-  datos_tecnologia:     [{ url: "https://www.arcotel.gob.ec/resoluciones/", label: "Resoluciones ARCOTEL" }],
+const AGENT_CONFIG: Record<string, {
+  tavilyQueries: string[];
+  tavilyDomains: string[];
+  jinaUrls: { url: string; label: string }[];
+}> = {
+  laboral: {
+    tavilyQueries: [
+      "salario básico unificado SBU Ecuador 2025 acuerdo ministerial trabajo",
+      "normativa laboral Ecuador 2025 código trabajo ministerio",
+    ],
+    tavilyDomains: ["trabajo.gob.ec", "iess.gob.ec", "registroficial.gob.ec"],
+    jinaUrls: [{ url: "https://www.trabajo.gob.ec/salarios/", label: "Ministerio del Trabajo — Salarios" }],
+  },
+  corporativo: {
+    tavilyQueries: [
+      "Superintendencia de Compañías SCVS Ecuador resolución 2025",
+      "SCPM fusiones adquisiciones Ecuador 2025 normativa",
+    ],
+    tavilyDomains: ["supercias.gob.ec", "scpm.gob.ec", "registroficial.gob.ec"],
+    jinaUrls: [{ url: "https://www.supercias.gob.ec/portalscvs/", label: "SCVS — Superintendencia de Compañías" }],
+  },
+  tributario: {
+    tavilyQueries: [
+      "resoluciones SRI Ecuador 2025 impuesto renta IVA retenciones vigentes",
+      "reforma tributaria Ecuador 2025 LORTI normativa vigente",
+    ],
+    tavilyDomains: ["sri.gob.ec", "registroficial.gob.ec", "finanzas.gob.ec"],
+    jinaUrls: [{ url: "https://www.sri.gob.ec/normativa-vigente", label: "SRI — Normativa vigente" }],
+  },
+  financiero: {
+    tavilyQueries: [
+      "tasas de interés BCE Ecuador 2025 activa pasiva referencial",
+      "Banco Central Ecuador indicadores económicos 2025",
+    ],
+    tavilyDomains: ["bce.fin.ec", "superbancos.gob.ec", "registroficial.gob.ec"],
+    jinaUrls: [{ url: "https://www.bce.fin.ec/tasas-de-interes/", label: "BCE — Tasas de interés" }],
+  },
+  aviacion: {
+    tavilyQueries: [
+      "DGAC Ecuador resolución aviación civil 2025 normativa",
+      "regulaciones aeronáuticas Ecuador RDAC 2025 vigentes",
+    ],
+    tavilyDomains: ["aviacion.gob.ec", "registroficial.gob.ec"],
+    jinaUrls: [{ url: "https://www.aviacion.gob.ec/regulaciones-aeronauticas-del-ecuador-rae/", label: "DGAC — Regulaciones" }],
+  },
+  contratacion_publica: {
+    tavilyQueries: [
+      "SERCOP Ecuador umbrales contratación pública 2025 resolución vigente",
+      "LOSNCP reforma Ecuador 2025 normativa SERCOP",
+    ],
+    tavilyDomains: ["sercop.gob.ec", "registroficial.gob.ec"],
+    jinaUrls: [{ url: "https://www.sercop.gob.ec/normativa/", label: "SERCOP — Normativa" }],
+  },
+  propiedad_intelectual: {
+    tavilyQueries: [
+      "SENADI Ecuador 2025 marcas patentes resolución normativa vigente",
+      "propiedad intelectual Ecuador Código INGENIOS 2025",
+    ],
+    tavilyDomains: ["senadi.gob.ec", "registroficial.gob.ec"],
+    jinaUrls: [{ url: "https://www.senadi.gob.ec/normativa/", label: "SENADI — Normativa" }],
+  },
+  datos_tecnologia: {
+    tavilyQueries: [
+      "LOPDP Ecuador 2025 Superintendencia Protección Datos Personales resolución",
+      "ARCOTEL Ecuador 2025 telecomunicaciones resolución normativa",
+    ],
+    tavilyDomains: ["arcotel.gob.ec", "registroficial.gob.ec", "snap.gob.ec"],
+    jinaUrls: [{ url: "https://www.arcotel.gob.ec/resoluciones/", label: "ARCOTEL — Resoluciones" }],
+  },
 };
 
-async function fetchWithTimeout(url: string, timeoutMs = 5000): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+async function searchTavily(
+  queries: string[],
+  domains: string[],
+  caseQuery: string,
+): Promise<string[]> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return [];
+
+  const client = tavily({ apiKey });
+  const fullQuery = `${queries[0]} ${caseQuery}`.slice(0, 400);
+
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; SpingarnLegalBot/1.0; legal research)",
-        "Accept": "text/html,application/xhtml+xml,text/plain",
-      },
+    const result = await client.search(fullQuery, {
+      searchDepth: "basic",
+      maxResults: 5,
+      includeDomains: domains,
+      includeAnswer: true,
     });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    const text = await res.text();
-    return text.slice(0, 20000);
+
+    const snippets: string[] = [];
+
+    if (result.answer) {
+      snippets.push(`Síntesis: ${result.answer}`);
+    }
+
+    for (const r of result.results.slice(0, 4)) {
+      if (r.content && r.content.length > 50) {
+        snippets.push(`[${r.title ?? r.url}]\n${r.content.slice(0, 600)}\nFuente: ${r.url}`);
+      }
+    }
+
+    return snippets;
   } catch {
-    clearTimeout(timer);
-    return null;
+    return [];
   }
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\s{3,}/g, "\n")
-    .trim()
-    .slice(0, 8000);
-}
-
-async function extractRelevantSnippets(
-  anthropic: Anthropic,
-  rawText: string,
-  sourceLabel: string,
-  query: string,
-): Promise<string | null> {
-  if (!rawText.trim()) return null;
+async function fetchJina(url: string, label: string): Promise<string | null> {
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 350,
-      messages: [{
-        role: "user",
-        content: `Del contenido de "${sourceLabel}", extrae SOLO los fragmentos relevantes para: "${query}". Si no hay contenido relevante, responde NADA. Máximo 250 palabras, texto plano.\n\nCONTENIDO:\n${rawText.slice(0, 4000)}`,
-      }],
+    const res = await fetch(`https://r.jina.ai/${url}`, {
+      headers: {
+        "Accept": "text/plain",
+        "X-Return-Format": "text",
+      },
+      signal: AbortSignal.timeout(8000),
     });
-    const text = msg.content[0].type === "text" ? msg.content[0].text.trim() : "";
-    if (text === "NADA" || text.length < 20) return null;
-    return `[${sourceLabel}]\n${text}`;
+    if (!res.ok) return null;
+    const text = (await res.text()).slice(0, 5000).trim();
+    if (text.length < 100) return null;
+    return `[${label}]\n${text}`;
   } catch {
     return null;
   }
@@ -73,28 +129,23 @@ async function extractRelevantSnippets(
 export async function buildAgentLegalBlock(
   agentId: string,
   caseDescription: string,
-  anthropic: Anthropic,
 ): Promise<string> {
-  const sources = AGENT_FETCH_SOURCES[agentId] ?? [];
-  if (sources.length === 0) return "";
+  const config = AGENT_CONFIG[agentId];
+  if (!config) return "";
 
-  const query = caseDescription.slice(0, 200);
+  const caseQuery = caseDescription.slice(0, 200);
 
-  let liveSnippet: string | null = null;
-  try {
-    const { url, label } = sources[0];
-    const html = await fetchWithTimeout(url, 4000);
-    if (html) {
-      const text = stripHtml(html);
-      if (text.length > 100) {
-        liveSnippet = await extractRelevantSnippets(anthropic, text, label, query);
-      }
-    }
-  } catch {
-    // silent fail
-  }
+  const [tavilySnippets, ...jinaResults] = await Promise.all([
+    searchTavily(config.tavilyQueries, config.tavilyDomains, caseQuery),
+    ...config.jinaUrls.map(({ url, label }) => fetchJina(url, label)),
+  ]);
 
-  if (!liveSnippet) return "";
+  const snippets = [
+    ...tavilySnippets,
+    ...jinaResults.filter((s): s is string => !!s),
+  ];
 
-  return `\n\n---\nEXTRACTO FUENTE OFICIAL CONSULTADA EN TIEMPO REAL (${new Date().toISOString().split("T")[0]}):\n${liveSnippet}\n---`;
+  if (snippets.length === 0) return "";
+
+  return `\n\n---\nINFORMACIÓN LEGAL VIGENTE OBTENIDA EN TIEMPO REAL (${new Date().toISOString().split("T")[0]}):\n${snippets.join("\n\n")}\n---`;
 }
