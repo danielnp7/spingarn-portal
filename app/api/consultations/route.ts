@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
       .from("profiles")
       .select("id")
       .eq("sub_area_id", sub_area_id)
-      .in("role", ["admin", "partner2"])
+      .in("role", ["admin", "partner1", "partner2"])
       .limit(1)
       .maybeSingle();
     assigned_to = advisor?.id ?? null;
@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
         notifyIds = [assigned_to];
       } else {
         const { data: partners } = await admin
-          .from("profiles").select("id").in("role", ["admin", "partner2"]);
+          .from("profiles").select("id").in("role", ["admin", "partner1", "partner2"]);
         notifyIds = (partners ?? []).map((p: { id: string }) => p.id);
       }
 
