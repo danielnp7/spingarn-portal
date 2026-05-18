@@ -71,39 +71,27 @@ const AGENT_CONFIG: Record<string, {
   },
 };
 
-async function searchTavily(
-  queries: string[],
-  caseQuery: string,
-): Promise<string[]> {
+async function tavilySearch(query: string): Promise<string[]> {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {
     console.error("[tavily] TAVILY_API_KEY no configurada");
     return [];
   }
-
   const client = tavily({ apiKey });
-  const fullQuery = `${queries[0]} ${caseQuery}`.slice(0, 400);
-
   try {
-    const result = await client.search(fullQuery, {
+    const result = await client.search(query, {
       searchDepth: "advanced",
       maxResults: 5,
       includeAnswer: true,
     });
-
     const snippets: string[] = [];
-
-    if (result.answer) {
-      snippets.push(`Síntesis: ${result.answer}`);
-    }
-
+    if (result.answer) snippets.push(`Síntesis: ${result.answer}`);
     for (const r of result.results.slice(0, 4)) {
       if (r.content && r.content.length > 50) {
         snippets.push(`[${r.title ?? r.url}]\n${r.content.slice(0, 600)}\nFuente: ${r.url}`);
       }
     }
-
-    console.log(`[tavily] "${fullQuery.slice(0, 80)}…" → ${snippets.length} resultados`);
+    console.log(`[tavily] "${query.slice(0, 80)}…" → ${snippets.length} resultados`);
     return snippets;
   } catch (err) {
     console.error("[tavily] error:", err);
@@ -137,16 +125,19 @@ export async function buildAgentLegalBlock(
   if (!config) return "";
 
   const year = new Date().getFullYear();
-  const caseQuery = caseDescription.slice(0, 200);
-  const queries = config.tavilyQueries.map(q => q.replace(/20\d\d/g, String(year)));
+  const caseTitle = caseDescription.split("\n")[0].slice(0, 120);
+  const specificQuery = `${caseTitle} Ecuador ${year} normativa vigente reforma`;
+  const areaQuery = config.tavilyQueries[0].replace(/20\d\d/g, String(year));
 
-  const [tavilySnippets, ...jinaResults] = await Promise.all([
-    searchTavily(queries, caseQuery),
+  const [specificSnippets, areaSnippets, ...jinaResults] = await Promise.all([
+    tavilySearch(specificQuery),
+    tavilySearch(areaQuery),
     ...config.jinaUrls.map(({ url, label }) => fetchJina(url, label)),
   ]);
 
   const snippets = [
-    ...tavilySnippets,
+    ...specificSnippets,
+    ...areaSnippets.filter(s => !specificSnippets.includes(s)),
     ...jinaResults.filter((s): s is string => !!s),
   ];
 
