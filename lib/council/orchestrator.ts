@@ -28,13 +28,21 @@ function adminClient() {
 
 type KnowledgeEntry = { type: string; title: string; content: string; source: string | null; effective_date: string | null };
 
-async function fetchKnowledge(agentId: string): Promise<KnowledgeEntry[]> {
+async function fetchKnowledge(departmentId: string): Promise<KnowledgeEntry[]> {
   try {
     const admin = adminClient();
+    // Resolve UUIDs for all agents in this department (new hub-managed agents)
+    const { data: agentRows } = await admin
+      .from("agents")
+      .select("id")
+      .eq("department_id", departmentId);
+    const uuids = (agentRows ?? []).map((a: { id: string }) => a.id);
+    if (uuids.length === 0) return [];
+
     const { data } = await admin
       .from("agent_knowledge")
       .select("type, title, content, source, effective_date")
-      .eq("agent_id", agentId)
+      .in("agent_id", uuids)
       .eq("is_active", true)
       .order("type")
       .order("created_at", { ascending: false });
