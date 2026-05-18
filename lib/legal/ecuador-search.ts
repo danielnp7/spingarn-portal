@@ -7,8 +7,8 @@ const AGENT_CONFIG: Record<string, {
 }> = {
   laboral: {
     tavilyQueries: [
-      "salario básico unificado SBU Ecuador 2025 acuerdo ministerial trabajo",
-      "normativa laboral Ecuador 2025 código trabajo ministerio",
+      "salario básico unificado SBU Ecuador 2025 valor acuerdo ministerial vigente",
+      "aportaciones IESS Ecuador 2025 porcentaje empleado empleador vigente",
     ],
     tavilyDomains: ["trabajo.gob.ec", "iess.gob.ec", "registroficial.gob.ec"],
     jinaUrls: [{ url: "https://www.trabajo.gob.ec/salarios/", label: "Ministerio del Trabajo — Salarios" }],
@@ -136,10 +136,12 @@ export async function buildAgentLegalBlock(
   const config = AGENT_CONFIG[agentId];
   if (!config) return "";
 
+  const year = new Date().getFullYear();
   const caseQuery = caseDescription.slice(0, 200);
+  const queries = config.tavilyQueries.map(q => q.replace(/20\d\d/g, String(year)));
 
   const [tavilySnippets, ...jinaResults] = await Promise.all([
-    searchTavily(config.tavilyQueries, caseQuery),
+    searchTavily(queries, caseQuery),
     ...config.jinaUrls.map(({ url, label }) => fetchJina(url, label)),
   ]);
 
