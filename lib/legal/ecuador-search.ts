@@ -73,20 +73,21 @@ const AGENT_CONFIG: Record<string, {
 
 async function searchTavily(
   queries: string[],
-  domains: string[],
   caseQuery: string,
 ): Promise<string[]> {
   const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) {
+    console.error("[tavily] TAVILY_API_KEY no configurada");
+    return [];
+  }
 
   const client = tavily({ apiKey });
   const fullQuery = `${queries[0]} ${caseQuery}`.slice(0, 400);
 
   try {
     const result = await client.search(fullQuery, {
-      searchDepth: "basic",
+      searchDepth: "advanced",
       maxResults: 5,
-      includeDomains: domains,
       includeAnswer: true,
     });
 
@@ -102,8 +103,10 @@ async function searchTavily(
       }
     }
 
+    console.log(`[tavily] "${fullQuery.slice(0, 80)}…" → ${snippets.length} resultados`);
     return snippets;
-  } catch {
+  } catch (err) {
+    console.error("[tavily] error:", err);
     return [];
   }
 }
@@ -136,7 +139,7 @@ export async function buildAgentLegalBlock(
   const caseQuery = caseDescription.slice(0, 200);
 
   const [tavilySnippets, ...jinaResults] = await Promise.all([
-    searchTavily(config.tavilyQueries, config.tavilyDomains, caseQuery),
+    searchTavily(config.tavilyQueries, caseQuery),
     ...config.jinaUrls.map(({ url, label }) => fetchJina(url, label)),
   ]);
 
