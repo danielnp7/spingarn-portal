@@ -98,9 +98,14 @@ async function buildCaseLegalBlock(caseTitle: string): Promise<string> {
 function buildKnowledgeBlock(entries: KnowledgeEntry[]): string {
   if (entries.length === 0) return "";
   const typeLabels: Record<string, string> = {
-    norma_vigente: "NORMAS VIGENTES", jurisprudencia: "JURISPRUDENCIA Y PRECEDENTES",
-    caso_tipo: "CASOS TIPO", criterio: "CRITERIOS SPINGARN",
-    alerta_cambio: "⚠ ALERTAS DE CAMBIO NORMATIVO RECIENTE", otro: "INFORMACIÓN ADICIONAL",
+    ley: "📜 LEYES", reglamento: "📜 REGLAMENTOS", resolucion: "📜 RESOLUCIONES",
+    circular: "📜 CIRCULARES", decreto: "📜 DECRETOS",
+    jurisprudencia: "⚖️ JURISPRUDENCIA Y PRECEDENTES",
+    opinion: "💡 OPINIONES Y CRITERIOS SPINGARN",
+    reporte: "📊 REPORTES Y ANÁLISIS", memo: "📝 MEMORANDOS Y CRITERIOS INTERNOS",
+    norma_vigente: "📜 NORMAS VIGENTES", caso_tipo: "CASOS TIPO",
+    criterio: "💡 CRITERIOS SPINGARN", alerta_cambio: "⚠ ALERTAS DE CAMBIO NORMATIVO RECIENTE",
+    otro: "INFORMACIÓN ADICIONAL",
   };
   const grouped: Record<string, KnowledgeEntry[]> = {};
   for (const e of entries) { if (!grouped[e.type]) grouped[e.type] = []; grouped[e.type].push(e); }
