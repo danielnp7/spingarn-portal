@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
@@ -8,7 +8,7 @@ const CREDIT_COST = 1;
 const BRAND = "#C8007A";
 
 type Session = { id: string; title: string; status: string; created_at: string };
-type StreamedAgent = { agent_id: string; agent_name: string; agent_area: string; agent_emoji: string; response: string };
+type AgentRow = { id: string; agent_id: string; agent_name: string; agent_area: string; response: string };
 
 const AGENT_EMOJI: Record<string, string> = {
   laboral: "⚖️", corporativo: "🏛️", tributario: "📊", financiero: "💹",
@@ -31,23 +31,52 @@ export default function ConsejoPage() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [credits, setCredits] = useState<number | null>(null);
 
-  // Streaming state
-  const [phase, setPhase] = useState<"idle" | "streaming" | "done" | "failed">("idle");
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [streamedAgents, setStreamedAgents] = useState<StreamedAgent[]>([]);
+  const [phase, setPhase] = useState<"idle" | "processing" | "done" | "failed">("idle");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeTitle, setActiveTitle] = useState("");
+  const [agents, setAgents] = useState<AgentRow[]>([]);
   const [synthesis, setSynthesis] = useState<string | null>(null);
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch("/api/council/sessions")
-      .then(r => r.json())
-      .then(d => setSessions(Array.isArray(d) ? d : []))
+      .then(r => r.json()).then(d => setSessions(Array.isArray(d) ? d : []))
       .finally(() => setLoadingSessions(false));
     fetch("/api/wallet")
       .then(r => r.json())
       .then(d => setCredits((d?.balance_credits ?? 0) - (d?.reserved_credits ?? 0)))
       .catch(() => setCredits(null));
   }, []);
+
+  function startPolling(sessionId: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/council/sessions/${sessionId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.agentResponses) setAgents(data.agentResponses);
+        if (data.session?.status === "completed") {
+          setSynthesis(data.session.council_response ?? null);
+          setPhase("done");
+          setCredits(prev => prev !== null ? Math.max(0, prev - CREDIT_COST) : null);
+          stopPolling();
+          fetch("/api/council/sessions").then(r => r.json()).then(d => { if (Array.isArray(d)) setSessions(d); });
+        } else if (data.session?.status === "failed") {
+          setPhase("failed");
+          setError("Error procesando el caso. Intenta de nuevo.");
+          stopPolling();
+        }
+      } catch { /* ignore */ }
+    }, 2000);
+  }
+
+  function stopPolling() {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }
+
+  useEffect(() => () => stopPolling(), []);
 
   const canAfford = credits === null || credits >= CREDIT_COST;
   const descLen = description.trim().length;
@@ -57,11 +86,11 @@ export default function ConsejoPage() {
     if (!title.trim() || descLen < 50 || !canAfford) return;
 
     setError("");
-    setPhase("streaming");
-    setStreamedAgents([]);
+    setAgents([]);
     setSynthesis(null);
-    setSessionId(null);
     setExpandedAgent(null);
+    setActiveTitle(title.trim());
+    setPhase("processing");
 
     try {
       const res = await fetch("/api/council/ask", {
@@ -77,46 +106,19 @@ export default function ConsejoPage() {
         return;
       }
 
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Error enviando el caso");
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Error");
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+      const sessionId = data.session_id as string;
+      setActiveSessionId(sessionId);
+      startPolling(sessionId);
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+      fetch(`/api/council/process/${sessionId}`, { method: "POST" }).catch(() => {
+        setPhase("failed");
+        setError("Error iniciando el análisis.");
+        stopPolling();
+      });
 
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
-
-        for (const part of parts) {
-          if (!part.startsWith("event: ")) continue;
-          const nlIdx = part.indexOf("\n");
-          if (nlIdx < 0) continue;
-          const event = part.slice(7, nlIdx);
-          const rawData = part.slice(nlIdx + 6);
-          let data: Record<string, unknown>;
-          try { data = JSON.parse(rawData); } catch { continue; }
-
-          if (event === "session") {
-            setSessionId(data.session_id as string);
-            setCredits(prev => prev !== null ? prev - CREDIT_COST : null);
-          } else if (event === "agent") {
-            setStreamedAgents(prev => [...prev, data as unknown as StreamedAgent]);
-          } else if (event === "synthesis") {
-            setSynthesis(data.response as string);
-          } else if (event === "done") {
-            setPhase("done");
-          } else if (event === "error") {
-            throw new Error(data.message as string ?? "Error procesando el caso");
-          }
-        }
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error enviando el caso");
       setPhase("failed");
@@ -124,31 +126,31 @@ export default function ConsejoPage() {
   }
 
   function reset() {
+    stopPolling();
     setPhase("idle");
     setTitle("");
     setDescription("");
-    setStreamedAgents([]);
+    setAgents([]);
     setSynthesis(null);
-    setSessionId(null);
+    setActiveSessionId(null);
     setError("");
-    fetch("/api/council/sessions").then(r => r.json()).then(d => { if (Array.isArray(d)) setSessions(d); });
   }
-
-  const isStreaming = phase === "streaming" || phase === "done";
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-8">
 
-      {/* ── STREAMING VIEW ──────────────────────────────────────── */}
-      {isStreaming ? (
+      {/* ── LIVE DELIBERATION VIEW ──────────────────────────── */}
+      {phase !== "idle" && (
         <div className="space-y-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+              <h1 className="text-xl font-bold text-gray-900">{activeTitle}</h1>
               <p className="text-sm text-gray-400 mt-0.5">
                 {phase === "done"
-                  ? `${streamedAgents.length} especialista${streamedAgents.length !== 1 ? "s" : ""} deliberaron`
-                  : "El consejo está deliberando…"}
+                  ? `${agents.length} especialista${agents.length !== 1 ? "s" : ""} deliberaron`
+                  : agents.length > 0
+                    ? `${agents.length} completado${agents.length !== 1 ? "s" : ""} — sintetizando…`
+                    : "El consejo está analizando el caso…"}
               </p>
             </div>
             {phase === "done" && (
@@ -158,7 +160,6 @@ export default function ConsejoPage() {
             )}
           </div>
 
-          {/* Synthesis */}
           {synthesis ? (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-50 flex items-center gap-2">
@@ -168,43 +169,39 @@ export default function ConsejoPage() {
               <div className="px-6 py-5 prose prose-sm prose-gray max-w-none">
                 <ReactMarkdown>{synthesis}</ReactMarkdown>
               </div>
-              {sessionId && (
+              {activeSessionId && (
                 <div className="px-6 py-3 border-t border-gray-50 bg-gray-50/50">
-                  <button onClick={() => router.push(`/portal/consejo/${sessionId}`)}
+                  <button onClick={() => router.push(`/portal/consejo/${activeSessionId}`)}
                     className="text-xs font-medium hover:underline" style={{ color: BRAND }}>
                     Ver sesión completa →
                   </button>
                 </div>
               )}
             </div>
-          ) : (
+          ) : phase !== "failed" && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex items-center gap-4">
-              <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin flex-shrink-0" style={{ borderColor: BRAND, borderTopColor: "transparent" }} />
+              <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin flex-shrink-0"
+                style={{ borderColor: BRAND, borderTopColor: "transparent" }} />
               <div>
                 <p className="text-sm font-medium text-gray-700">
-                  {streamedAgents.length > 0 ? "Sintetizando posición del consejo…" : "Cargando conocimiento y seleccionando especialistas…"}
+                  {agents.length > 0 ? "Sintetizando posición del consejo…" : "Cargando conocimiento y seleccionando especialistas…"}
                 </p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {streamedAgents.length > 0
-                    ? `${streamedAgents.length} especialista${streamedAgents.length !== 1 ? "s" : ""} completado${streamedAgents.length !== 1 ? "s" : ""}`
-                    : "Esto puede tomar entre 30 y 90 segundos"}
-                </p>
+                <p className="text-xs text-gray-400 mt-0.5">Esto puede tomar entre 30 y 90 segundos</p>
               </div>
             </div>
           )}
 
-          {/* Agent deliberations */}
-          {streamedAgents.length > 0 && (
+          {agents.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Deliberaciones individuales</p>
               <div className="space-y-2">
-                {streamedAgents.map(ar => {
-                  const emoji = ar.agent_emoji || AGENT_EMOJI[ar.agent_id] || "🤖";
-                  const isOpen = expandedAgent === ar.agent_id;
+                {agents.map(ar => {
+                  const emoji = AGENT_EMOJI[ar.agent_id] ?? "🤖";
+                  const isOpen = expandedAgent === ar.id;
                   return (
-                    <div key={ar.agent_id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div key={ar.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                       <button className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-gray-50 transition"
-                        onClick={() => setExpandedAgent(isOpen ? null : ar.agent_id)}>
+                        onClick={() => setExpandedAgent(isOpen ? null : ar.id)}>
                         <span className="text-base flex-shrink-0">{emoji}</span>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-800">{ar.agent_name}</p>
@@ -224,7 +221,7 @@ export default function ConsejoPage() {
                     </div>
                   );
                 })}
-                {phase === "streaming" && (
+                {phase === "processing" && (
                   <div className="bg-white rounded-xl border border-dashed border-gray-200 px-4 py-3.5 flex items-center gap-3">
                     <div className="w-4 h-4 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin flex-shrink-0" />
                     <p className="text-sm text-gray-400">Analizando…</p>
@@ -234,11 +231,17 @@ export default function ConsejoPage() {
             </div>
           )}
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && (
+            <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+              <p className="text-xs text-red-600">{error}</p>
+              <button onClick={reset} className="text-xs font-medium mt-1 hover:underline" style={{ color: BRAND }}>Intentar de nuevo</button>
+            </div>
+          )}
         </div>
+      )}
 
-      ) : (
-        /* ── FORM VIEW ──────────────────────────────────────────── */
+      {/* ── FORM VIEW ──────────────────────────────────────── */}
+      {phase === "idle" && (
         <>
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -302,8 +305,7 @@ export default function ConsejoPage() {
                 </div>
               )}
 
-              <button type="submit"
-                disabled={descLen < 50 || !title.trim() || !canAfford}
+              <button type="submit" disabled={descLen < 50 || !title.trim() || !canAfford}
                 className="w-full py-3 text-white rounded-xl text-sm font-semibold transition disabled:opacity-40"
                 style={{ background: BRAND }}>
                 {!canAfford ? "Sin créditos — recarga para continuar" : `Someter al Consejo · ${CREDIT_COST} crédito`}
