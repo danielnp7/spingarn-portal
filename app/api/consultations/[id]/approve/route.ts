@@ -101,13 +101,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     await admin.from("payment_requests").insert({
       client_id: profile.client_id,
-      consultation_id: id,
       type: "consultation_payment",
       status: "pending",
       amount_usd: consultation.estimated_fee ?? null,
-      credits_requested: null,
       notes: `Pago directo aprobado por cliente para consulta: ${consultation.title}`,
-      created_by_user_id: user.id,
+      user_id: user.id,
     });
 
     // Notify contador(es)

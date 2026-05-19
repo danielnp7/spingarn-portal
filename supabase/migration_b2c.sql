@@ -43,16 +43,17 @@ END $$;
 
 -- 4. Tabla payment_requests (si no existe ya)
 CREATE TABLE IF NOT EXISTS payment_requests (
-  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  client_id   UUID        NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  user_id     UUID        NOT NULL,
-  type        TEXT        NOT NULL DEFAULT 'wallet_topup',
-  credits     INT,
-  amount_usd  NUMERIC(10,2),
-  notes       TEXT,
-  status      TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'rejected', 'cancelled')),
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  resolved_at TIMESTAMPTZ
+  id               UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id        UUID        NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  user_id          UUID        NOT NULL,
+  consultation_id  UUID        REFERENCES consultations(id) ON DELETE SET NULL,
+  type             TEXT        NOT NULL DEFAULT 'wallet_topup',
+  credits          INT,
+  amount_usd       NUMERIC(10,2),
+  notes            TEXT,
+  status           TEXT        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'rejected', 'cancelled')),
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at      TIMESTAMPTZ
 );
 
 ALTER TABLE payment_requests ENABLE ROW LEVEL SECURITY;
@@ -68,3 +69,6 @@ BEGIN
       USING (client_id IN (SELECT client_id FROM profiles WHERE id = auth.uid()));
   END IF;
 END $$;
+
+-- Add consultation_id column if migration was already partially applied
+ALTER TABLE payment_requests ADD COLUMN IF NOT EXISTS consultation_id UUID REFERENCES consultations(id) ON DELETE SET NULL;

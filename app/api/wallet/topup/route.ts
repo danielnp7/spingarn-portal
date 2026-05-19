@@ -46,10 +46,10 @@ export async function POST(req: NextRequest) {
       client_id: profile.client_id,
       type: "wallet_topup",
       status: "pending",
-      credits_requested: credits,
+      credits: credits,
       amount_usd: amountUsd,
       notes: notes?.trim() || null,
-      created_by_user_id: user.id,
+      user_id: user.id,
     })
     .select()
     .single();
