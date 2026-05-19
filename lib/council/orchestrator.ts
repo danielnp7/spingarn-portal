@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { COUNCIL_AGENTS, ORCHESTRATOR_SYSTEM_PROMPT, selectRelevantAgents, type CouncilAgent } from "./agents";
-import { buildAgentLegalBlock } from "@/lib/legal/ecuador-search";
+import { tavily } from "@tavily/core";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -16,6 +16,10 @@ export interface CouncilResult {
   selectedAgents: CouncilAgent[];
 }
 
+export type StreamEvent =
+  | { type: "agent"; result: AgentResult }
+  | { type: "synthesis"; response: string };
+
 function getClient(): Anthropic {
   return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 }
@@ -26,23 +30,41 @@ function adminClient() {
   return createAdmin(url, key);
 }
 
+type HubAgent = { id: string; name: string; description: string | null; department_id: string };
 type KnowledgeEntry = { type: string; title: string; content: string; source: string | null; effective_date: string | null };
 
-async function fetchKnowledge(departmentId: string): Promise<KnowledgeEntry[]> {
+async function selectCouncilAgents(caseTitle: string, caseDescription: string): Promise<CouncilAgent[]> {
+  const caseText = (caseTitle + " " + caseDescription).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
   try {
     const admin = adminClient();
-    // Resolve UUIDs for all agents in this department (new hub-managed agents)
-    const { data: agentRows } = await admin
-      .from("agents")
-      .select("id")
-      .eq("department_id", departmentId);
-    const uuids = (agentRows ?? []).map((a: { id: string }) => a.id);
-    if (uuids.length === 0) return [];
+    const { data: hubAgents } = await admin.from("agents").select("id, name, description, department_id");
 
+    const matchedDepts = new Set<string>();
+    for (const agent of (hubAgents ?? []) as HubAgent[]) {
+      const agentText = (agent.name + " " + (agent.description ?? ""))
+        .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const tokens = agentText.split(/[\s,;:()\-\/]+/).filter(t => t.length > 3);
+      if (tokens.some(t => caseText.includes(t))) {
+        matchedDepts.add(agent.department_id);
+      }
+    }
+
+    if (matchedDepts.size > 0) {
+      const fromHub = COUNCIL_AGENTS.filter(a => matchedDepts.has(a.id));
+      if (fromHub.length > 0) return fromHub;
+    }
+  } catch { /* fall through */ }
+
+  return selectRelevantAgents(caseDescription);
+}
+
+async function fetchAllKnowledge(): Promise<KnowledgeEntry[]> {
+  try {
+    const admin = adminClient();
     const { data } = await admin
       .from("agent_knowledge")
       .select("type, title, content, source, effective_date")
-      .in("agent_id", uuids)
       .eq("is_active", true)
       .order("type")
       .order("created_at", { ascending: false });
@@ -52,24 +74,36 @@ async function fetchKnowledge(departmentId: string): Promise<KnowledgeEntry[]> {
   }
 }
 
+async function buildCaseLegalBlock(caseTitle: string): Promise<string> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return "";
+  try {
+    const year = new Date().getFullYear();
+    const query = `${caseTitle} Ecuador ${year} normativa vigente legislación`;
+    const client = tavily({ apiKey });
+    const result = await client.search(query, { searchDepth: "advanced", maxResults: 5, includeAnswer: true });
+    const snippets: string[] = [];
+    if (result.answer) snippets.push(`Síntesis: ${result.answer}`);
+    for (const r of result.results.slice(0, 4)) {
+      if (r.content && r.content.length > 50)
+        snippets.push(`[${r.title ?? r.url}]\n${r.content.slice(0, 500)}\nFuente: ${r.url}`);
+    }
+    if (snippets.length === 0) return "";
+    return `\n\n---\nINFORMACIÓN EN TIEMPO REAL (${new Date().toISOString().split("T")[0]}):\n${snippets.join("\n\n")}\n---`;
+  } catch {
+    return "";
+  }
+}
+
 function buildKnowledgeBlock(entries: KnowledgeEntry[]): string {
   if (entries.length === 0) return "";
-
   const typeLabels: Record<string, string> = {
-    norma_vigente:  "NORMAS VIGENTES",
-    jurisprudencia: "JURISPRUDENCIA Y PRECEDENTES",
-    caso_tipo:      "CASOS TIPO",
-    criterio:       "CRITERIOS SPINGARN",
-    alerta_cambio:  "⚠ ALERTAS DE CAMBIO NORMATIVO RECIENTE",
-    otro:           "INFORMACIÓN ADICIONAL",
+    norma_vigente: "NORMAS VIGENTES", jurisprudencia: "JURISPRUDENCIA Y PRECEDENTES",
+    caso_tipo: "CASOS TIPO", criterio: "CRITERIOS SPINGARN",
+    alerta_cambio: "⚠ ALERTAS DE CAMBIO NORMATIVO RECIENTE", otro: "INFORMACIÓN ADICIONAL",
   };
-
   const grouped: Record<string, KnowledgeEntry[]> = {};
-  for (const e of entries) {
-    if (!grouped[e.type]) grouped[e.type] = [];
-    grouped[e.type].push(e);
-  }
-
+  for (const e of entries) { if (!grouped[e.type]) grouped[e.type] = []; grouped[e.type].push(e); }
   const sections = Object.entries(grouped).map(([type, items]) => {
     const header = typeLabels[type] ?? type.toUpperCase();
     const body = items.map(e => {
@@ -80,81 +114,60 @@ function buildKnowledgeBlock(entries: KnowledgeEntry[]): string {
     }).join("\n\n");
     return `=== ${header} ===\n${body}`;
   });
-
-  return `\n\n---\nCONOCIMIENTO ESPECIALIZADO DE SPINGARN PARA ESTE AGENTE\n(Información validada por los socios de la firma — tiene precedencia sobre tu conocimiento base cuando haya conflicto)\n\n${sections.join("\n\n")}\n---`;
+  return `\n\n---\nCONOCIMIENTO ESPECIALIZADO DE SPINGARN\n(Información validada por los socios — tiene precedencia)\n\n${sections.join("\n\n")}\n---`;
 }
 
 async function runAgent(
-  client: Anthropic,
-  agent: CouncilAgent,
-  caseTitle: string,
-  caseDescription: string,
-  knowledge: KnowledgeEntry[],
-  legalBlock: string,
+  client: Anthropic, agent: CouncilAgent,
+  caseTitle: string, caseDescription: string,
+  knowledge: KnowledgeEntry[], legalBlock: string,
 ): Promise<AgentResult> {
   const knowledgeBlock = buildKnowledgeBlock(knowledge);
-  const hierarchyNote = `\n\nJERARQUÍA DE FUENTES (respeta este orden):\n1. CONOCIMIENTO SPINGARN (sección anterior) — máxima prioridad, no contradecir\n2. INFORMACIÓN EN TIEMPO REAL (sección siguiente, obtenida hoy) — usar para cifras y resoluciones vigentes\n3. Tu conocimiento de entrenamiento — solo para marcos normativos estables; si hay conflicto con 1 o 2, prevalecen éstas\nSi no tienes certeza de un dato, indícalo explícitamente en lugar de inventar.`;
+  const hierarchyNote = `\n\nJERARQUÍA DE FUENTES:\n1. CONOCIMIENTO SPINGARN — máxima prioridad\n2. INFORMACIÓN EN TIEMPO REAL — cifras y resoluciones vigentes\n3. Conocimiento de entrenamiento — marcos normativos estables`;
   const systemPrompt = agent.systemPrompt + knowledgeBlock + hierarchyNote + legalBlock;
-
   const message = await client.messages.create({
-    model: MODEL,
-    max_tokens: 1500,
+    model: MODEL, max_tokens: 1500,
     system: systemPrompt,
-    messages: [
-      {
-        role: "user",
-        content: `CASO SOMETIDO AL CONSEJO CONSULTIVO DE SPINGARN\n\nTítulo: ${caseTitle}\n\nDescripción:\n${caseDescription}\n\nAnaliza este caso desde tu área de especialización y presenta tu posición al consejo.`,
-      },
-    ],
+    messages: [{ role: "user", content: `CASO: ${caseTitle}\n\n${caseDescription}\n\nAnaliza desde tu especialización.` }],
   });
-
-  const response = message.content
-    .filter(b => b.type === "text")
-    .map(b => (b as { type: "text"; text: string }).text)
-    .join("\n");
-
+  const response = message.content.filter(b => b.type === "text").map(b => (b as { type: "text"; text: string }).text).join("\n");
   return { agent, response };
 }
 
 async function synthesize(client: Anthropic, caseTitle: string, agentResults: AgentResult[]): Promise<string> {
-  const deliberations = agentResults
-    .map(r => `### ${r.agent.emoji} ${r.agent.name}\n${r.response}`)
-    .join("\n\n---\n\n");
-
+  const deliberations = agentResults.map(r => `### ${r.agent.emoji} ${r.agent.name}\n${r.response}`).join("\n\n---\n\n");
   const message = await client.messages.create({
-    model: MODEL,
-    max_tokens: 2000,
+    model: MODEL, max_tokens: 2000,
     system: ORCHESTRATOR_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `CASO: ${caseTitle}\n\nDELIBERACIONES DEL CONSEJO:\n\n${deliberations}\n\nRedacta la posición unificada e institucional del Consejo Consultivo de Spingarn.`,
-      },
-    ],
+    messages: [{ role: "user", content: `CASO: ${caseTitle}\n\nDELIBERACIONES:\n\n${deliberations}\n\nRedacta la posición unificada del Consejo Consultivo de Spingarn.` }],
   });
-
-  return message.content
-    .filter(b => b.type === "text")
-    .map(b => (b as { type: "text"; text: string }).text)
-    .join("\n");
+  return message.content.filter(b => b.type === "text").map(b => (b as { type: "text"; text: string }).text).join("\n");
 }
 
-export async function runCouncil(caseTitle: string, caseDescription: string): Promise<CouncilResult> {
+export async function runCouncil(
+  caseTitle: string,
+  caseDescription: string,
+  emit?: (event: StreamEvent) => void,
+): Promise<CouncilResult> {
   const client = getClient();
-  const selectedAgents = selectRelevantAgents(caseDescription);
+  const selectedAgents = await selectCouncilAgents(caseTitle, caseDescription);
 
-  // Fetch knowledge + legal context for all agents in parallel, then run agents
-  const agentResults = await Promise.all(
+  const [allKnowledge, legalBlock] = await Promise.all([
+    fetchAllKnowledge(),
+    buildCaseLegalBlock(caseTitle),
+  ]);
+
+  const agentResults: AgentResult[] = [];
+  await Promise.all(
     selectedAgents.map(async agent => {
-      const [knowledge, legalBlock] = await Promise.all([
-        fetchKnowledge(agent.id),
-        buildAgentLegalBlock(agent.id, caseDescription).catch(() => ""),
-      ]);
-      return runAgent(client, agent, caseTitle, caseDescription, knowledge, legalBlock);
+      const result = await runAgent(client, agent, caseTitle, caseDescription, allKnowledge, legalBlock);
+      agentResults.push(result);
+      emit?.({ type: "agent", result });
     })
   );
 
   const councilResponse = await synthesize(client, caseTitle, agentResults);
+  emit?.({ type: "synthesis", response: councilResponse });
 
   return { agentResults, councilResponse, selectedAgents };
 }
