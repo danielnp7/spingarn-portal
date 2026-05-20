@@ -33,6 +33,21 @@ function adminClient() {
 type HubAgent = { id: string; name: string; description: string | null; department_id: string };
 type KnowledgeEntry = { type: string; title: string; content: string; source: string | null; effective_date: string | null };
 
+async function embedQuery(text: string): Promise<number[] | null> {
+  const apiKey = process.env.VOYAGE_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const res = await fetch("https://api.voyageai.com/v1/embeddings", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "voyage-3-lite", input: [text.slice(0, 16000)], input_type: "query" }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data[0].embedding as number[];
+  } catch { return null; }
+}
+
 async function selectCouncilAgents(caseTitle: string, caseDescription: string): Promise<CouncilAgent[]> {
   const caseText = (caseTitle + " " + caseDescription).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -59,9 +74,21 @@ async function selectCouncilAgents(caseTitle: string, caseDescription: string): 
   return selectRelevantAgents(caseDescription);
 }
 
-async function fetchAllKnowledge(): Promise<KnowledgeEntry[]> {
+async function searchKnowledge(query: string, matchCount = 12): Promise<KnowledgeEntry[]> {
   try {
     const admin = adminClient();
+    const embedding = await embedQuery(query);
+
+    if (embedding) {
+      const { data } = await admin.rpc("match_knowledge", {
+        query_embedding: embedding,
+        match_count: matchCount,
+        only_active: true,
+      });
+      if (data && data.length > 0) return data as KnowledgeEntry[];
+    }
+
+    // Fallback: fetch all (if Voyage unavailable or no embeddings yet)
     const { data } = await admin
       .from("agent_knowledge")
       .select("type, title, content, source, effective_date")
@@ -157,8 +184,9 @@ export async function runCouncil(
   const client = getClient();
   const selectedAgents = await selectCouncilAgents(caseTitle, caseDescription);
 
+  const query = `${caseTitle} ${caseDescription}`;
   const [allKnowledge, legalBlock] = await Promise.all([
-    fetchAllKnowledge(),
+    searchKnowledge(query, 12),
     buildCaseLegalBlock(caseTitle),
   ]);
 
