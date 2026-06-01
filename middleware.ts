@@ -9,7 +9,7 @@ function isConfigured() {
   return url.length > 0 && !url.includes("tu-proyecto");
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   if (!isConfigured()) return NextResponse.next();
 
   const { pathname } = request.nextUrl;
