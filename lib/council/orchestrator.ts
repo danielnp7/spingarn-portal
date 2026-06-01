@@ -5,6 +5,29 @@ import { tavily } from "@tavily/core";
 
 const MODEL = "claude-sonnet-4-6";
 
+// Carga agentes desde agents_registry (fuente única de verdad).
+// Fallback a COUNCIL_AGENTS hardcodeados si la tabla no está disponible.
+async function loadRegistryAgents(): Promise<CouncilAgent[]> {
+  try {
+    const admin = adminClient();
+    const { data, error } = await admin
+      .from("agents_registry")
+      .select("slug, name, area, emoji, system_prompt")
+      .eq("active_portal", true)
+      .order("sort_order");
+    if (error || !data || data.length === 0) return COUNCIL_AGENTS;
+    return data.map((a: { slug: string; name: string; area: string; emoji: string; system_prompt: string }) => ({
+      id: a.slug,
+      name: a.name,
+      area: a.area,
+      emoji: a.emoji,
+      systemPrompt: a.system_prompt,
+    }));
+  } catch {
+    return COUNCIL_AGENTS;
+  }
+}
+
 export interface AgentResult {
   agent: CouncilAgent;
   response: string;
@@ -51,10 +74,33 @@ async function embedQuery(text: string): Promise<number[] | null> {
 async function selectCouncilAgents(caseTitle: string, caseDescription: string): Promise<CouncilAgent[]> {
   const caseText = (caseTitle + " " + caseDescription).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+  // Load all active portal agents from registry
+  const allAgents = await loadRegistryAgents();
+
   try {
     const admin = adminClient();
-    const { data: hubAgents } = await admin.from("agents").select("id, name, description, department_id");
 
+    // Try tag-based matching from agents_registry
+    const { data: registryAgents } = await admin
+      .from("agents_registry")
+      .select("slug, tags")
+      .eq("active_portal", true);
+
+    if (registryAgents && registryAgents.length > 0) {
+      const matched = new Set<string>();
+      for (const ra of registryAgents as { slug: string; tags: string[] }[]) {
+        if ((ra.tags ?? []).some((tag: string) => caseText.includes(tag.toLowerCase()))) {
+          matched.add(ra.slug);
+        }
+      }
+      if (matched.size > 0) {
+        const fromRegistry = allAgents.filter(a => matched.has(a.id));
+        if (fromRegistry.length > 0) return fromRegistry;
+      }
+    }
+
+    // Fallback: Hub agents keyword matching
+    const { data: hubAgents } = await admin.from("agents").select("id, name, description, department_id");
     const matchedDepts = new Set<string>();
     for (const agent of (hubAgents ?? []) as HubAgent[]) {
       const agentText = (agent.name + " " + (agent.description ?? ""))
@@ -64,14 +110,22 @@ async function selectCouncilAgents(caseTitle: string, caseDescription: string): 
         matchedDepts.add(agent.department_id);
       }
     }
-
     if (matchedDepts.size > 0) {
-      const fromHub = COUNCIL_AGENTS.filter(a => matchedDepts.has(a.id));
+      const fromHub = allAgents.filter(a => matchedDepts.has(a.id));
       if (fromHub.length > 0) return fromHub;
     }
   } catch { /* fall through */ }
 
-  return selectRelevantAgents(caseDescription);
+  // Keyword fallback using loaded agents
+  const byKeyword = selectRelevantAgents(caseDescription);
+  if (byKeyword.length > 0 && byKeyword !== COUNCIL_AGENTS) return byKeyword;
+
+  // Match loaded agents by keyword manually
+  const text = caseDescription.toLowerCase();
+  const matched = allAgents.filter(a =>
+    (a.id.split("_")).some(word => word.length > 3 && text.includes(word))
+  );
+  return matched.length > 0 ? matched : allAgents;
 }
 
 async function searchKnowledge(query: string, matchCount = 12): Promise<KnowledgeEntry[]> {
