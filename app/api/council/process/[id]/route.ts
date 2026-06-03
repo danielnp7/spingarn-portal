@@ -38,17 +38,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("client_id", profile.client_id).maybeSingle();
 
   try {
-    const result = await runCouncil(session.title, session.description, async (event) => {
-      if (event.type === "agent") {
-        await admin.from("council_agent_responses").insert({
-          session_id: id,
-          agent_id: event.result.agent.id,
-          agent_name: event.result.agent.name,
-          agent_area: event.result.agent.area,
-          response: event.result.response,
-        });
-      }
-    });
+    const result = await runCouncil(
+      session.title,
+      session.description,
+      async (event) => {
+        if (event.type === "agent") {
+          await admin.from("council_agent_responses").insert({
+            session_id: id,
+            agent_id: event.result.agent.id,
+            agent_name: event.result.agent.name,
+            agent_area: event.result.agent.area,
+            response: event.result.response,
+          });
+        }
+      },
+      id,      // sessionId — for token weight tracking
+      user.id, // userId
+    );
 
     // Deduct credits after successful delivery
     const current = wallet?.balance_credits ?? 0;

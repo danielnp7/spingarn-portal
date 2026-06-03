@@ -31,6 +31,8 @@ async function loadRegistryAgents(): Promise<CouncilAgent[]> {
 export interface AgentResult {
   agent: CouncilAgent;
   response: string;
+  input_tokens: number;
+  output_tokens: number;
 }
 
 export interface CouncilResult {
@@ -217,23 +219,73 @@ async function runAgent(
     messages: [{ role: "user", content: `CASO: ${caseTitle}\n\n${caseDescription}\n\nAnaliza desde tu especialización.` }],
   });
   const response = message.content.filter(b => b.type === "text").map(b => (b as { type: "text"; text: string }).text).join("\n");
-  return { agent, response };
+  return {
+    agent,
+    response,
+    input_tokens: message.usage.input_tokens,
+    output_tokens: message.usage.output_tokens,
+  };
 }
 
-async function synthesize(client: Anthropic, caseTitle: string, agentResults: AgentResult[]): Promise<string> {
+async function synthesize(
+  client: Anthropic,
+  caseTitle: string,
+  agentResults: AgentResult[],
+): Promise<{ response: string; input_tokens: number; output_tokens: number }> {
   const deliberations = agentResults.map(r => `### ${r.agent.emoji} ${r.agent.name}\n${r.response}`).join("\n\n---\n\n");
   const message = await client.messages.create({
     model: MODEL, max_tokens: 2000,
     system: ORCHESTRATOR_SYSTEM_PROMPT,
     messages: [{ role: "user", content: `CASO: ${caseTitle}\n\nDELIBERACIONES:\n\n${deliberations}\n\nRedacta la posición unificada del Consejo Consultivo de Spingarn.` }],
   });
-  return message.content.filter(b => b.type === "text").map(b => (b as { type: "text"; text: string }).text).join("\n");
+  const response = message.content.filter(b => b.type === "text").map(b => (b as { type: "text"; text: string }).text).join("\n");
+  return { response, input_tokens: message.usage.input_tokens, output_tokens: message.usage.output_tokens };
+}
+
+async function recordTokenUsage(
+  sessionId: string,
+  userId: string | null,
+  source: "portal",
+  agentResults: AgentResult[],
+  synthesisTokens: { input_tokens: number; output_tokens: number },
+): Promise<void> {
+  try {
+    const admin = adminClient();
+    const rows = [
+      ...agentResults.map(r => ({
+        source,
+        session_id: sessionId,
+        user_id: userId,
+        agent_slug: r.agent.id,
+        agent_name: r.agent.name,
+        input_tokens: r.input_tokens,
+        output_tokens: r.output_tokens,
+        model_used: MODEL,
+      })),
+      {
+        source,
+        session_id: sessionId,
+        user_id: userId,
+        agent_slug: "orchestrator",
+        agent_name: "Síntesis del Consejo",
+        input_tokens: synthesisTokens.input_tokens,
+        output_tokens: synthesisTokens.output_tokens,
+        model_used: MODEL,
+      },
+    ];
+    await admin.from("session_agent_usage").insert(rows);
+    await admin.rpc("recalculate_agent_weights", { p_session_id: sessionId });
+  } catch {
+    // Non-fatal — usage tracking should never block the response
+  }
 }
 
 export async function runCouncil(
   caseTitle: string,
   caseDescription: string,
   emit?: (event: StreamEvent) => void,
+  sessionId?: string,
+  userId?: string,
 ): Promise<CouncilResult> {
   const client = getClient();
   const selectedAgents = await selectCouncilAgents(caseTitle, caseDescription);
@@ -253,8 +305,13 @@ export async function runCouncil(
     })
   );
 
-  const councilResponse = await synthesize(client, caseTitle, agentResults);
-  emit?.({ type: "synthesis", response: councilResponse });
+  const synthesis = await synthesize(client, caseTitle, agentResults);
+  emit?.({ type: "synthesis", response: synthesis.response });
 
-  return { agentResults, councilResponse, selectedAgents };
+  // Record token usage automatically — immutable, no human discretion
+  if (sessionId) {
+    await recordTokenUsage(sessionId, userId ?? null, "portal", agentResults, synthesis);
+  }
+
+  return { agentResults, councilResponse: synthesis.response, selectedAgents };
 }
