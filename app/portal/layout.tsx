@@ -15,7 +15,7 @@ export default async function PortalLayout({ children }: { children: React.React
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "cliente") redirect("/login");
+  if (!profile || profile.role !== "cliente") redirect("/acceso-denegado");
 
   const { data: client } = profile.client_id
     ? await supabase.from("clients").select("name").eq("id", profile.client_id).single()

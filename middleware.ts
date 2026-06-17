@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth", "/signup"];
+const PUBLIC_PATHS = ["/login", "/auth", "/signup", "/acceso-denegado"];
 const STATIC = ["/_next", "/favicon", "/icons", "/manifest"];
 
 function isConfigured() {
@@ -46,7 +46,8 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user && pathname === "/login") {
-    return NextResponse.redirect(new URL("/portal", request.url));
+    // Only redirect clients — partners/admins must not be bounced to /portal (would loop with layout guard)
+    return NextResponse.next();
   }
 
   return response;
